@@ -1,2 +1,5 @@
-# HTAPP-Pipelines
-A record of the analysis pipelines used to create the HTAPP data
+This is a centralized space to decribe and point to computational pipelines used when generating the HTAPP data. Please use the wiki attached to this repo to learn more.
+
+Thank you,
+
+The HTAPP Team
