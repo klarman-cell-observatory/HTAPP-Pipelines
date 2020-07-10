@@ -1,0 +1,425 @@
+---
+title: "htapp_methods_NSCLC_annotate.Rmd"
+author: "Orr Ashenberg"
+date: "4/21/2019"
+output: html_notebook
+---
+
+Annotate NSCLC cancer data.
+
+```{r}
+library(ggplot2)
+library(cowplot)
+theme_set(theme_cowplot())
+library(Seurat)
+library(dplyr)
+library(Matrix)
+library(gplots)
+library(GSA)
+library(stringr)
+library(fossil)  # adjusted rand index function
+
+# Set directories 
+proj.path <- "/path/to/project/directory"
+user.path <- "/path/to/user/files"
+
+# Set date year_month_day to use in figure directory name and in names for saving Rda objects.
+date <- "ENTER_DATE"  
+name.project <- "HTAPP_NSCLC_example"
+
+# Load Seurat object that was converted from cumulus.
+load(pasteo(proj.path, "/src/Rdata/ENTER_DATE_HTAPP_NSCLC_example_convert_scrtools_to_seurat_cumulus.Rda")) 
+
+# Read in cumulus results 
+sampleid.cumulus <- c("NSCLC14_C4", "NSCLC14_PDEC", "NSCLC14_LE", "NSCLC14_combined")
+
+# Create output directories.
+figures.dir <- paste0(proj.path, "/results/NSCLC14/", date, "_10x_annotate/")
+figures.path <- sapply(sampleid.cumulus, function(i) paste0(figures.dir, i, "_"), USE.NAMES = F) 
+
+# Save cluster annotation scores.
+Rda.path <- paste0(proj.path, "/src/Rdata/ENTER_DATE_NSCLC_exmample_seurat_annotate.Rda")
+cluster.scores.prefix <- paste0(proj.path, "/src/Rdata/clusterscores/", date, "_10x_", name.project, "_")
+cluster.scores.path <- paste(cluster.scores.prefix, sampleid.cumulus, "_cluster_scores.Rds", sep = "") 
+
+out.dir <- c(figures.dir, paste0(proj.path, "/src/Rdata"), paste0(proj.path, "/src/Rdata/clusterscores"), paste0(figures.dir, "tSNE_scores/"))
+sapply(out.dir, function(i) {if (!dir.exists(i)) {dir.create(i, recursive = T)} })
+
+
+# Read in list of gene sets associated with different cell types.
+file.gmt.S3A <- paste0(user.path, "/data/genelists/2018_LivnatJerby_melanoma_cell_types_Cell_S3A.gmt")
+file.gmt.S3B <- paste0(user.path, "/data/genelists/2018_LivnatJerby_melanoma_cell_types_Cell_S3B.gmt")
+file.gmt.lung <- paste0(user.path, "/data/genelists/Lung_Alex.gmt")
+invisible(capture.output(gs.S3A <- GSA.read.gmt(file.gmt.S3A)))
+invisible(capture.output(gs.S3B <- GSA.read.gmt(file.gmt.S3B)))
+invisible(capture.output(gs.lung <- GSA.read.gmt(file.gmt.lung)))
+gs.S3B$genesets <- gs.S3B$genesets[-5]  # remove malignant cell signature
+gs.S3B$geneset.names <- gs.S3B$geneset.names[-5]
+gs.S3B$geneset.descriptions <- gs.S3B$geneset.descriptions[-5]
+gs.S3B$genesets <- c(gs.S3B$genesets, gs.lung$genesets[1:9])
+gs.S3B$geneset.names <- c(gs.S3B$geneset.names, gs.lung$geneset.names[1:9])
+gs.S3B$geneset.descriptions <- c(gs.S3B$geneset.descriptions, gs.lung$geneset.descriptions[1:9])
+
+# genes <- gs.S3B$genesets[gs.S3B$geneset.names == "CAF"][[1]]
+# genes <- c("TPSAB1", "TPSB2", "CPA3", "KIT", "FCER1G") # Mast cell markers
+# genes <- c("CD3D", "TRAC", "CD4", "CD8A", "NCAM1") # T cell markers
+# genes <- c("CD19", "MS4A1", "CD79A", "JCHAIN", "MZB1", "IGHM") # B cell markers
+
+# Load my functions.
+source(paste0(user.path, "/code/R/plotutils.R"))
+source(paste0(user.path, "/code/R/seuratutils.R"))
+source(paste0(user.path, "/code/R/color.R"))
+```
+
+## Get Livnat Jerby marker genes and make gmt files
+```{r, eval = F}
+library(readxl)
+
+file.marker <- paste0(proj.path, "/doc/genesets/2018_LivnatJerby_melanoma_cell_types_Cell.xlsx")
+
+excel <- read_excel(file.marker, sheet = "TableS3A_cell.type.markers", skip = 1)
+lines <- c()
+for (col in colnames(excel)) {
+  genes <- excel[[col]][!is.na(excel[[col]])]
+  line <- paste0(col, "\t", col, "\t", paste0(genes, collapse = "\t"))
+  lines <- c(lines, line)
+}
+fileConn <- file(paste0(proj.path, "/doc/genesets/2018_LivnatJerby_melanoma_cell_types_Cell_S3A.gmt"))
+writeLines(lines, fileConn)
+close(fileConn)
+
+excel <- read_excel(file.marker, sheet = "TableS3B_denovo.cell.type.sig", skip = 1)
+lines <- c()
+for (col in colnames(excel)) {
+  genes <- excel[[col]][!is.na(excel[[col]])]
+  line <- paste0(col, "\t", col, "\t", paste0(genes, collapse = "\t"))
+  lines <- c(lines, line)
+}
+fileConn <- file(paste0(proj.path, "/doc/genesets/2018_LivnatJerby_melanoma_cell_types_Cell_S3B.gmt"))
+writeLines(lines, fileConn)
+close(fileConn)
+```
+
+## Clustering 
+Seurat uses graph-based clusering with K-nearest neighbor graph and Euclidean distances in PCA space. The resolution parameter can be altered between 0.6-1.2 and increasing it increases the number of clusters.
+
+```{r cluster, eval = T}
+gcdata <- sapply(gcdata, function(data) FindClusters(object = data, reduction.type = "pca", dims.use = 1:20, resolution = 1, print.output = F, save.SNN = T, force.recalc = T))
+PrintFindClustersParams(object = gcdata[[1]])
+
+# Find cluster biomarkers and store in list of dataframes
+gcdata.markers <- lapply(gcdata, function(data) FindAllMarkers(object = data, min.pct = 0.2, logfc.threshold = 0.5, max.cells.per.ident = 1500, test.use = test, return.thresh = 0.1/nrow(data@data), print.bar = T))
+top2genes <- lapply(gcdata.markers, function(data) data %>% group_by(cluster) %>% top_n(2, avg_logFC))
+top10genes <- lapply(gcdata.markers, function(data) data %>% filter(avg_logFC > 0) %>% group_by(cluster) %>% top_n(10, avg_logFC))
+top100genes <- lapply(gcdata.markers, function(data) data %>% group_by(cluster) %>% top_n(100, avg_logFC))
+
+# Write cluster markers to csv file
+sapply(seq_along(gcdata), function(i) write.csv(top100genes[[i]], file=paste0(figures.path[i], "top_DE_genes.csv")))
+```
+
+## Annotate cell clusters
+We want to determine what cell type each cell cluster corresponds to. We will read in sets of genes known to be associated with a certain cell type or cell state and score each cell by that set of genes. We can then take the average score for that gene set for all cells within the cluster.
+
+```{r annotate, eval = F}
+# We want to determine what cell type each cell cluster corresponds to. We will read in sets of genes known to be associated with a certain cell type or cell state and score each cell by that set of genes. We can then take the average score for that gene set for all cells within the cluster.
+name.cluster <- "louvain_labels"
+gs <- gs.S3B
+
+# Iterate over each Seurat object and score each cluster with gene signatures.
+for (s in seq(sampleid.cumulus)) {
+  out.prefix <- paste0(figures.dir, "tSNE_scores/", sampleid.cumulus[s], "/")
+  cluster.scores <- RankModuleScore(gcdata[[s]], name.cluster, gs, out.prefix)
+  # For each cluster, rank the gene modules by their mean score for that cluster.
+  for (i in seq(cluster.scores[, name.cluster])) {
+    # Order gene modules in descending order, and ignore the first column which is the cluster number
+    top.clusters <- names(cluster.scores)[order(-cluster.scores[i, -c(1)]) + 1]
+    test.df <- cbind(data.frame(cluster = cluster.scores[i, name.cluster]), cluster.scores[i, top.clusters[1:3]])
+    print(test.df)
+  }
+  saveRDS(cluster.scores, cluster.scores.path[s])
+}
+
+# Example of reading in saved cluster scores and printing them.
+i <- 1
+name.cluster <- "louvain_labels"
+cluster.scores <- readRDS(cluster.scores.path[i])
+for (i in seq(cluster.scores[, name.cluster])) {
+  # Order gene modules in descending order, and ignore the first column which is the cluster number
+  top.clusters <- names(cluster.scores)[order(-cluster.scores[i, -c(1)]) + 1]
+  test.df <- cbind(data.frame(cluster = cluster.scores[i, name.cluster]), cluster.scores[i, top.clusters[1:3]])
+  print(test.df)
+}
+```
+## Label cell types with annotation
+Label cell subsets based on scoring gene modules above.
+```{r cluster_analysis, eval = F}
+
+
+PlotAnnotation <- function(gcdata, file.plot, title) {
+  df <- data.frame(gcdata@dr$umap@cell.embeddings, ident = gcdata@ident)
+  n.clusters <- n_distinct(df$ident)
+  centers <- df %>% group_by(ident) %>% summarise(x = median(UMAP1), y = median(UMAP2))  # cluster labels
+  p <- ggplot(data = df) + geom_point(mapping = aes(UMAP1, UMAP2, color = ident), size = 1, show.legend = F) +
+    labs(color = "cluster") + scale_colour_manual(values = material.heat(n.clusters)) +
+    geom_label(data = centers, mapping = aes(x = x, y = y, label = ident), size = 5,
+              color = "black", show.legend = F, alpha = 0.75) +
+    guides(colour = guide_legend(override.aes = list(size=5))) + ggtitle(title)
+  print(p)
+  ggsave(file.plot, width = 8, height = 8)
+}
+
+# Identify cell types based on marker genes and annotate clusters by their cell type
+i <- 1
+file.plot <- paste0(figures.path[i], "tSNE_annotate.png")
+title <- paste0(sampleid.cumulus[i])
+current.cluster.ids <- 1:12
+new.cluster.ids <-c("Macrophage", "Epithelial cell", "Macrophage", "Macrophage", "Macrophage", "T cell", "Macrophage", "Epithelial cell", "Epithelial cell", "Macrophage", "Epithelial cell", "B cell")
+gcdata[[i]] <- SetAllIdent(gcdata[[i]], id = "louvain_labels")
+gcdata[[i]]@ident <- plyr::mapvalues(x = gcdata[[i]]@ident, from = current.cluster.ids, to = new.cluster.ids)
+gcdata[[i]] <- StashIdent(gcdata[[i]], save.name = "annotate")
+PlotAnnotation(gcdata[[i]], file.plot, title)
+
+i <- 2  # Further divide fibroblasts and verify mast cells
+file.plot <- paste0(figures.path[i], "tSNE_annotate.png")
+title <- paste0(sampleid.cumulus[i])
+current.cluster.ids <- 1:13
+new.cluster.ids <-c("Endothelial cell", "Epithelial cell", "Fibroblast", "T cell", "Fibroblast", "Macrophage", "Macrophage", "Macrophage", "Fibroblast", "T cell", "B cell", "Fibroblast", "Mast cell")
+gcdata[[i]] <- SetAllIdent(gcdata[[i]], id = "louvain_labels")
+gcdata[[i]]@ident <- plyr::mapvalues(x = gcdata[[i]]@ident, from = current.cluster.ids, to = new.cluster.ids)
+gcdata[[i]] <- StashIdent(gcdata[[i]], save.name = "annotate")
+PlotAnnotation(gcdata[[i]], file.plot, title)
+
+i <- 3
+file.plot <- paste0(figures.path[i], "tSNE_annotate.png")
+title <- paste0(sampleid.cumulus[i])
+current.cluster.ids <- 1:14
+new.cluster.ids <-c("Endothelial cell", "T cell", "Fibroblast", "Fibroblast", "Macrophage", "Epithelial cell", "Fibroblast", "Macrophage", "Macrophage", "Fibroblast", "Endothelial cell", "Endothelial cell", "B cell", "Mast cell")
+gcdata[[i]] <- SetAllIdent(gcdata[[i]], id = "louvain_labels")
+gcdata[[i]]@ident <- plyr::mapvalues(x = gcdata[[i]]@ident, from = current.cluster.ids, to = new.cluster.ids)
+gcdata[[i]] <- StashIdent(gcdata[[i]], save.name = "annotate")
+PlotAnnotation(gcdata[[i]], file.plot, title)
+
+i <- 4
+file.plot <- paste0(figures.path[i], "tSNE_annotate.png")
+title <- paste0(sampleid.cumulus[i])
+current.cluster.ids <- 1:20
+new.cluster.ids <-c("Endothelial cell", "T cell", "Macrophage", "Macrophage", "Epithelial cell", "Fibroblast", "Fibroblast", "Macrophage", "Epithelial cell", "Fibroblast", "Macrophage", "T cell", "Macrophage", "Macrophage", "Mast cell", "B cell", "Endothelial cell", "Endothelial cell", "Epithelial cell", "B cell")
+gcdata[[i]] <- SetAllIdent(gcdata[[i]], id = "louvain_labels")
+gcdata[[i]]@ident <- plyr::mapvalues(x = gcdata[[i]]@ident, from = current.cluster.ids, to = new.cluster.ids)
+gcdata[[i]] <- StashIdent(gcdata[[i]], save.name = "annotate")
+PlotAnnotation(gcdata[[i]], file.plot, title)
+
+i <- 5
+file.plot <- paste0(figures.path[i], "tSNE_annotate.png")
+title <- paste0(sampleid.cumulus[i])
+current.cluster.ids <- 1:10
+new.cluster.ids <-c("T cell", "T cell", "T cell", "Macrophage", "B cell", "B cell", "Epithelial cell", "Fibroblast", "Mast cell", "Endothelial cell")
+gcdata[[i]] <- SetAllIdent(gcdata[[i]], id = "louvain_labels")
+gcdata[[i]]@ident <- plyr::mapvalues(x = gcdata[[i]]@ident, from = current.cluster.ids, to = new.cluster.ids)
+gcdata[[i]] <- StashIdent(gcdata[[i]], save.name = "annotate")
+PlotAnnotation(gcdata[[i]], file.plot, title)
+
+i <- 6
+file.plot <- paste0(figures.path[i], "tSNE_annotate.png")
+title <- paste0(sampleid.cumulus[i])
+current.cluster.ids <- 1:14
+new.cluster.ids <-c("Epithelial cell", "T cell", "Macrophage", "T cell", "Macrophage", "Fibroblast", "B cell", "T cell", "Epithelial cell", "Endothelial cell", "B cell", "Macrophage", "Epithelial cell", "Mast cell")
+gcdata[[i]] <- SetAllIdent(gcdata[[i]], id = "louvain_labels")
+gcdata[[i]]@ident <- plyr::mapvalues(x = gcdata[[i]]@ident, from = current.cluster.ids, to = new.cluster.ids)
+gcdata[[i]] <- StashIdent(gcdata[[i]], save.name = "annotate")
+PlotAnnotation(gcdata[[i]], file.plot, title)
+
+i <- 7
+file.plot <- paste0(figures.path[i], "tSNE_annotate.png")
+title <- paste0(sampleid.cumulus[i])
+current.cluster.ids <- 1:16
+new.cluster.ids <-c("Epithelial cell", "Epithelial cell", "Epithelial cell", "Epithelial cell", "Epithelial cell", "Fibroblast", "Epithelial cell", "Fibroblast", "Endothelial cell", "Epithelial cell", "Epithelial cell", "Epithelial cell", "Epithelial cell", "Epithelial cell", "Epithelial cell", "Epithelial cell")
+gcdata[[i]] <- SetAllIdent(gcdata[[i]], id = "louvain_labels")
+gcdata[[i]]@ident <- plyr::mapvalues(x = gcdata[[i]]@ident, from = current.cluster.ids, to = new.cluster.ids)
+gcdata[[i]] <- StashIdent(gcdata[[i]], save.name = "annotate")
+PlotAnnotation(gcdata[[i]], file.plot, title)
+
+i <- 8
+file.plot <- paste0(figures.path[i], "tSNE_annotate.png")
+title <- paste0(sampleid.cumulus[i])
+current.cluster.ids <- 1:19
+new.cluster.ids <-c("Epithelial cell", "Epithelial cell", "Epithelial cell", "Epithelial cell", "T cell", "Epithelial cell", "Fibroblast", "Epithelial cell", "Macrophage", "Fibroblast", "Endothelial cell", "Epithelial cell", "Epithelial cell", "Epithelial cell", "Epithelial cell", "Epithelial cell", "B cell", "B cell", "Mast cell")
+gcdata[[i]] <- SetAllIdent(gcdata[[i]], id = "louvain_labels")
+gcdata[[i]]@ident <- plyr::mapvalues(x = gcdata[[i]]@ident, from = current.cluster.ids, to = new.cluster.ids)
+gcdata[[i]] <- StashIdent(gcdata[[i]], save.name = "annotate")
+PlotAnnotation(gcdata[[i]], file.plot, title)
+
+# Save current progress with annotating each sample.
+save(gcdata, sampleid.cumulus, file = Rda.path)
+```
+
+## Cluster analysis
+We want to compare the differences in cell cluster composition across the different experimental conditions. For example, does one condition result in higher representation of immune cells? We make tables of experimental conditions vs number of cells in each cell cluster. We then look at this in a few ways.
+1: Within an experimental condition, what percent of cells are T, B, NK, etc...?
+2: Within a cell subset like T cells or B cells, what percent of those cells come from each experimental condition?
+3: Given the background distribution of cell types across all the experimental conditions, within an experimental condition is a cell type over or under-represented? In other words, does one experimental condition do better or worse at detecting a specific cell type compared to the average across all experimental conditions? 
+```{r cluster_freq, eval = T}
+# Use annotated cell subset labels.
+# gcdata@ident <- plyr::mapvalues(x = gcdata@ident, from = current.cluster.ids, to = new.cluster.ids)
+# gcdata <- gcdata.liger
+i <- 4
+gcdata[[i]] <- SetAllIdent(gcdata[[i]], id = "annotate")
+
+# Cluster vs Experimental condition where row is cluster and column is experimental condition.
+table.cluster.experiment <- table(gcdata[[i]]@ident, gcdata[[i]]@meta.data$Condition)
+
+# Within a cell cluster, what percent of cells come from each experimental condition?
+# Within an experimental condition, what percent of cells are cell type 1,2,3,etc...?
+freq.cluster.experiment <- table.cluster.experiment / rowSums(table.cluster.experiment) 
+freq.experiment.cluster <- sweep(table.cluster.experiment, 2, colSums(table.cluster.experiment), '/') 
+
+# Across all cells, the frequency of cells coming from each experiment.
+# Across all cells, the frequency of cells coming from each cell cluster.
+freq.experiment <- prop.table(colSums(table.cluster.experiment))
+freq.cluster <- prop.table(rowSums(table.cluster.experiment))  
+
+# Make bar plot of frequency of cell clusters found within each experiment.
+df <- as.data.frame.matrix(freq.experiment.cluster)  # convert table to dataframe, and then gather key-values
+df["cluster"] <- rownames(df)
+df <- gather(df, "experiment", "frequency", c(1:(ncol(df)-1)))
+df$experiment <- factor(df$experiment, levels = levels(gcdata[[i]]@meta.data$Condition))  # order samples
+df$cluster <- factor(df$cluster, levels = unique(df$cluster))  # order by original cluster ordering
+ggplot(data = df) + geom_bar(mapping = aes(x = experiment, y = frequency, fill = cluster), stat = "identity") + theme(axis.text.x  = element_text(angle=90, hjust=1)) + scale_fill_manual(values=material.heat(length(levels(df$cluster))))
+ggsave(paste0(figures.path[i], 'cluster_freq_bar_plot.png'), width = 6, height = 8)
+
+# Make bar plot of frequency of experimental conditions found within each cell cluster.
+df <- as.data.frame.matrix(freq.cluster.experiment)  # convert table to dataframe, and then gather key-values
+df["cluster"] <- rownames(df)
+df <- gather(df, "experiment", "frequency", c(1:(ncol(df)-1)))
+df$experiment <- factor(df$experiment, levels = levels(gcdata[[i]]@meta.data$Condition))  # order samples
+df$cluster <- factor(df$cluster, levels = unique(df$cluster))  # order by original cluster ordering
+ggplot(data = df) + geom_bar(mapping = aes(x = cluster, y = frequency, fill = experiment), stat = "identity") + theme(axis.text.x  = element_text(angle=90, hjust=1)) + scale_fill_manual(values=material.heat(length(levels(df$experiment))))
+ggsave(paste0(figures.path[i], 'experiment_freq_bar_plot.png'), width = 6, height = 8)
+```
+
+## Estimate ambient RNA levels using SoupX
+https://cdn.rawgit.com/constantAmateur/SoupX/master/inst/doc/pbmcTutorial.html
+https://cdn.rawgit.com/constantAmateur/SoupX/master/inst/doc/estimatingContamination.html
+
+```{r soupx}
+# Packages needed to run SoupX code.
+library(SoupX)
+library(DropletUtils)
+library(ggplot2)
+
+# Specify which Seurat object to run SoupX on.
+load(Rda.path)
+i <- 3
+gcdata[[i]] <- RunUMAP(gcdata[[i]], min_dist=0.5, spread=1, metric="euclidean", n_neighbors=15, dims.use = 1:50)
+file.plot <- paste0(figures.path[i], "UMAP_annotate.png")
+title <- paste0(sampleid.cumulus[i])
+gcdata[[i]] <- SetAllIdent(gcdata[[i]], id = "annotate")
+PlotAnnotation(gcdata[[i]], file.plot, title)
+
+# Specify a set of specific marker genes for each cell type, that we do not expect to be expressed in other cell types.
+# The names in this list should match the names of the cell-type annotations used in the Seurat object.
+genes.soup <- list("T cell" = c("TRAC", "CD3D", "CD3E",	"CD247"), 
+                   "B cell" = c("JCHAIN", "MZB1", "MS4A1", "IGKC", "IGHA1"),
+                   "Macrophage" = c("MRC1", "CD163", "ITGAM", "MS4A4A", "MS4A6A", "C1QA", "MSR1"),
+                   "Epithelial cell" = c("SFTPB", "LPCAT1", "NAPSA"))
+
+# Violin plot of marker gene expression for those cells expected to express the marker genes.
+individual.plots <- vector("list", length(genes.soup))
+for (k in seq(genes.soup)) {
+  celltype <- names(genes.soup)[k]
+  print(celltype)
+  gcdata[[i]]@meta.data[["group"]] <- ifelse(gcdata[[i]]@meta.data$annotate == celltype, celltype, paste0("not ", celltype))
+  gcdata[[i]]@meta.data[["group"]] <- factor(gcdata[[i]]@meta.data[["group"]], levels = c(celltype, paste0("not ", celltype)))
+  individual.plots[[k]] <- VlnPlot(gcdata[[i]], genes.soup[[celltype]], point.size.use = 0, group.by = "group", 
+                                   size.x.use = 24, do.return = T)
+}
+plot_grid(plotlist = individual.plots, align = 'h')
+ggsave(paste0(figures.path[i], 'vln_marker_gene_expression.png'), width = 24, height = 18)
+
+# SoupX requires the raw and filtered gene-bc counts matrix in the Cell Ranger software directory format 
+# (e.g. filtered_gene_bc_matrices/GRCh38/barcodes.tsv, genes.tsv, matrix.mtx
+# Here we write both raw and filtered matrices to files, using the filtered cell barcodes that passed quality control in cumulus.
+# First we read in which cell barcodes passed the quality control filters.
+counts.matrix <- gcdata[[i]]@raw.data[, colnames(gcdata[[i]]@data)]  # raw data for cell BCs that pass QC
+barcodes <- colnames(counts.matrix)
+barcodes <- gsub(paste0(sampleid.cumulus[i], "-"), "", barcodes, perl = T)
+barcodes <- paste0(barcodes, "-1")  # change barcode names to match those names in the raw gene-bc counts matrix
+gene.symb <- rownames(counts.matrix)  # gene symbols
+gene.ids <- paste0("ENSG0000", seq(length(gene.symb)))  # make these dummy ensembl gene ids, required for proper format of genes.tsv
+# Next we write the raw and filtered count matrices to files.
+filtered.path <- paste0(figures.path[i], "counts/filtered_gene_bc_matrices/")
+raw.path <- paste0(figures.path[i], "counts/raw_gene_bc_matrices/")
+sapply(c(filtered.path, raw.path), function(i) {if (!dir.exists(i)) {dir.create(i, recursive = T)} })
+write10xCounts(paste0(filtered.path, "/GRCh38/"), counts.matrix, barcodes = barcodes, gene.id = gene.ids, gene.symbol = gene.symb, overwrite = T)  # filtered counts
+file.copy(paste0(proj.path, "/alignedreads/NSCLC/", sampleid.cumulus[i], "/raw_gene_bc_matrices/GRCh38"), raw.path, recursive = T)  # raw counts
+# raw <- Read10X(paste0(raw.path, "GRCh38/"))  # double check the counts were written correctly
+# filtered <- Read10X(paste0(filtered.path, "GRCh38/"))
+
+# Initialize the SoupX object, which also generates the soup gene expression profile.
+dataDirs <- paste0(figures.path[i], "counts/")  # contains filtered_gene_bc_matrices and raw_gene_bc_matrices
+scl <- load10X(dataDirs)
+# scl <- load10X(dataDirs, keepDroplets = TRUE)
+# scl$channels$Channel1 <- estimateSoup(scl$channels$Channel1)
+
+# Make a dataframe with tSNE coordinates, and make the cell names match between the SoupX object and the Seurat object.
+all.equal(rownames(gcdata[[i]]@meta.data), rownames(gcdata[[i]]@dr$umap@cell.embeddings))
+df.gcdata <- cbind(gcdata[[i]]@meta.data[, c("louvain_labels", "annotate", "nUMI")], gcdata[[i]]@dr$umap@cell.embeddings)
+cellnames <- gsub(paste0(sampleid.cumulus[i], "-"), "Channel1___", rownames(df.gcdata), perl = T)
+cellnames <- paste0(cellnames, "-1")
+rownames(df.gcdata) <- cellnames
+df.gcdata <- df.gcdata[colnames(scl$toc), ]  # change order of cell names to be consistent between SoupX and Seurat objects
+df.gcdata <- df.gcdata[, c("UMAP1", "UMAP2", "louvain_labels", "annotate", "nUMI")]
+all.equal(rownames(df.gcdata), colnames(scl$toc))
+
+# Show expression of a few cell-type specific marker genes on tSNE plot.
+genes <- c("TRAC", "CD3D", "IGKC", "JCHAIN", "MRC1", "SFTPB")
+individual.plots <- vector("list", length(genes))
+for (k in seq(genes)) {
+  df.gcdata[[genes[k]]] <- scl$toc[genes[k], ]
+  df.gcdata[["color"]] <- scl$toc[genes[k], ] > 0
+  individual.plots[[k]] <- ggplot(df.gcdata, aes(UMAP1, UMAP2)) + geom_point(aes(color = color)) + 
+    scale_color_discrete(name = paste0(genes[k], " > 0"))
+}
+plot_grid(plotlist = individual.plots, align = 'h')
+ggsave(paste0(figures.path[i], 'marker_gene_expression.png'), width = 18, height = 9)
+
+# Compare a gene's expression within a cell to its overall expression in the soup.
+individual.plots <- vector("list", length(genes))
+for (k in seq(genes)) {
+  individual.plots[[k]] <- plotMarkerMap(scl, genes[k], df.gcdata) + ggtitle(genes[k])
+}
+plot_grid(plotlist = individual.plots, align = 'h')
+ggsave(paste0(figures.path[i], 'marker_gene_observed_vs_expected_expression.png'), width = 18, height = 9)
+
+# Identifying bimodally expressed, soup-specific genes.
+scl <- inferNonExpressedGenes(scl)
+genes.bimodal <- rownames(scl$channels$Channel1$nonExpressedGenes)[seq(20)]
+plotMarkerDistribution(scl, "Channel1", genes.bimodal) + ggtitle(sampleid.cumulus[i])
+ggsave(paste0(figures.path[i], 'SoupX_identifies_bimodal_genes.png'), width = 18, height = 9)
+plotMarkerDistribution(scl, "Channel1", unlist(genes.soup)) + ggtitle(sampleid.cumulus[i])
+ggsave(paste0(figures.path[i], 'user_identifies_bimodal_genes.png'), width = 18, height = 9)
+
+# Make a matrix where rows correspond to gene sets, columns correspond to individual cells, and the value is a Boolean for
+# whether cell is not expected to express the corresponding gene set. This specifies which gene sets to use when estimating
+# the ambient contamination for a given cell.
+toUse <- matrix(0, nrow = length(names(genes.soup)), ncol = length(colnames(scl$toc)), dimnames = list(names(genes.soup), colnames(scl$toc)))  # initialize matrix of 0s
+# For each row in the matrix, specify which cells are not expected to express the gene set represented in the row.
+for (cellgroup in names(genes.soup)) {
+  print(cellgroup)
+  cells <- rownames(df.gcdata)[!df.gcdata$annotate %in% cellgroup]  # all cells not expressing this gene set
+  toUse[cellgroup, ] <- colnames(scl$toc) %in% cells
+}
+
+# Estimating the contamination fraction using soup-specific genes.
+# cellGroups is used to group cells when plotting contamination fraction (cersus grouping cells by nUMI), and 
+# usetoEst specifies which gene sets are not expressed within each cell.
+scl <- calculateContaminationFraction(scl, "Channel1", genes.soup, cellGroups = df.gcdata$annotate, useToEst = toUse)
+plotChannelContamination(scl, "Channel1") + ggtitle(sampleid.cumulus[i])
+ggsave(paste0(figures.path[i], 'cell_group_contamination_fraction.png'), width = 6, height = 6) 
+ggsave(paste0(figures.path[i], 'cell_group_contamination_fraction.pdf'), width = 6, height = 6) 
+df.gcdata %>% group_by(annotate) %>% summarise(n = mean(nUMI))
+
+# Cell-level contamination fraction.
+scl <- interpolateCellContamination(scl, "Channel1", useGlobal = TRUE)
+head(scl$channels$Channel1$rhos)
+```

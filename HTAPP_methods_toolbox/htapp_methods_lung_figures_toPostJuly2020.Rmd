@@ -1,0 +1,1191 @@
+---
+title: "htapp_methods_figures"
+author: "Caroline Porter"
+date: "4/25/2019"
+output: html_document
+---
+
+# Load libraries, set paths, etc. 
+```{r}
+
+# Load libraries
+rm(list = ls())
+
+library(ggplot2)
+library(cowplot)
+theme_set(theme_cowplot())
+library(Seurat)
+library(dplyr)
+library(Matrix)
+library(gplots)
+library(GSA)
+library(stringr)
+library(reticulate)
+library(DropletUtils)
+
+# Set directories 
+proj.path <- "/path/to/project/directory"
+user.path <- "/path/to/user/files"
+
+# Set date year_month_day to use in figure directory name and in names for saving Rda objects.
+date <- "ENTER_DATE"  
+name.project <- "HTAPP_NSCLC_example"
+
+### Read in raw counts data (pre-cumulus/cumulus) 
+# List of the sample IDs for which count matrices were generated 
+sampleid.counts <- c("NSCLC14_C4", "NSCLC14_PDEC", "NSCLC14_LE") # NEED TO UPDATE THESE 
+prefix.counts <- c("/alignreads/NSCLC14/")  
+expression.path <- sapply(seq(sampleid.counts), function(i) paste0(proj.path, prefix.counts, sampleid.counts[i], "/"))
+expression.files <- sapply(expression.path, function(i) Sys.glob(paste0(i, "raw*h5")))
+names(expression.path) <- sampleid.counts
+names(expression.files) <- sampleid.counts
+
+### Read in cumulus results 
+sampleid.cumulus <- c("NSCLC14_C4", "NSCLC14_PDEC", "NSCLC14_LE", "NSCLC14_combined")
+prefix.cumulus <- c("/results/NSCLC14/")
+h5ad.file <- sapply(sampleid.cumulus, function(i) Sys.glob(paste0(proj.path, prefix.cumulus, i, '/', "*seurat.h5ad")))
+names(h5ad.file) <- sampleid.cumulus
+
+# List of 10x metrics_summary.csv and molecule_info.h5 files containing quality control metrics.
+qc.files <- sapply(expression.path, function(i) Sys.glob(paste0(i, "/metrics*csv")))
+h5.files <- sapply(expression.path, function(i) Sys.glob(paste0(i, "/molecule*h5")))
+names(qc.files) <- sampleid.counts
+names(h5.files) <- sampleid.counts 
+
+
+# Set up naming for figures 
+a <- list(samples=c("NSCLC14_C4", "NSCLC14_PDEC", "NSCLC14_LE"), 
+          patient="NSCLC14", 
+          labels=c("C4", "PDEC", "LE")) 
+figures <- list(a)
+
+condition.tsnes.plot <- c("NSCLC14_combined")
+all.short.labs <- c("NSCLC14_C4"="C4", "NSCLC14_PDEC"="PDEC", "NSCLC14_LE"="ML")
+sampleid.cumulus.titles <- c("C4", "PDEC", "LE", "NSCLC14_comb")
+
+# Save paths
+Rda.cumulus.path <- paste0(proj.path, "/src/Rdata/", date, "_10x_", name.project, "_convert_scrtools_to_seurat_cumulus.Rda")
+Rda.emptydrops.path <- paste0(proj.path, "/src/Rdata/", date, "_10x_", name.project, "_emptydrops.Rda")  # run empty drops
+Rda.cumulus.scrublet.path <- paste0(proj.path, "/src/Rdata/", date, "_10x_", name.project, "_cumulus_scrublet.Rda")  # run both empty drops and remove doublets
+Rda.cumulus.scrublet.emptydrops.path <- paste0(proj.path, "/src/Rdata/", date, "_10x_", name.project, "_cumulus_scrublet_emptydrops.Rda")  # save seurat object with emptydrops and scrublet meta data 
+Rda.emptydrops.stats <- paste0(proj.path, "/src/Rdata/", date, "_10x_", name.project, "_emptydrops_stats.Rda")  # number of cells and genes per sample before and after EmptyDrops run
+Rda.seurat.annotate <- paste0(proj.path, '/src/Rdata/ENTER_DATE_HTAPP_NSCLC_example_seurat_annotate.Rda')
+Rda.seurat.annotate.10xQC <- paste0(proj.path, "/src/Rdata/", date, "_10x_", name.project, "_annoate_10xQC.Rda")
+Rda.seurat.final <- paste0(proj.path, "/src/Rdata/", date, "_10x_", name.project, "_seurat_final.Rda")
+Rda.seurat.final.umap <- paste0(proj.path, "/src/Rdata/", date, "_10x_", name.project, "_seurat_final_umap.Rda")
+Rda.inferCNV <- paste0(proj.path, "/src/Rdata/ENTER_DATE_HTAPP_NSCLC_example_inferCNV.Rda")
+
+
+# Create output directories.
+figures.dir <- paste0(proj.path, "/results/NSCLC/", date, "_10x_cumulus/")
+figures.final <- paste0(proj.path, "/Final_Figures/NSCLC/")
+figures.path <- sapply(sampleid.cumulus, function(i) paste0(figures.dir, i, "_"), USE.NAMES = F) 
+figures.path.counts <- sapply(sampleid.counts, function(i) paste0(figures.dir, i, "_"), USE.NAMES = F) 
+sparse.dir <- sapply(sampleid.cumulus, function(i) paste0(figures.dir, "matrix_emptydrops", "/", i, "/"), USE.NAMES = F) 
+figures.pythondir <- figures.dir  # where to write figures in python chunk
+
+out.dir <- c(figures.dir, figures.final, sparse.dir, paste0(proj.path, "/src/Rdata"))
+sapply(out.dir, function(i) {if (!dir.exists(i)) {dir.create(i, recursive = T)} })
+
+# Load my functions.
+source(paste0(user.path, "/code/orr_plotutils_04182019.R"))
+source(paste0(user.path, "/code/orr_seuratutils_04182019.R"))
+source(paste0(user.path, "/code/orr_color_04182019.R"))
+source(paste0(user.path, "/code/plot.umap.feature.R"))
+
+
+colors <- c("#e9a404", "#30699c", "#d04c71", "#358879", "#cd752a", "#538cb3")
+
+
+# knitr settings for code chunks.
+knitr::opts_knit$set(root.dir = proj.path)  # set working directory for all chunks
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(cache = TRUE)
+```
+
+```{r add molecule h5 info, eval = T}
+load(Rda.seurat.annotate)
+
+gcdata.tmp <- gcdata 
+gcdata.tmp <- lapply(sampleid.counts, function(x) gcdata.tmp[[x]] <- RenameCells(gcdata.tmp[[x]], new.names = gsub(paste0(x, '-'), '', rownames(gcdata.tmp[[x]]@meta.data))))
+names(gcdata.tmp) <- sampleid.counts 
+
+gcdata.tmp <- lapply(sampleid.counts, function(x) AddMoleculeInfoSeuratObject(gcdata.tmp[[x]], h5.files[[x]]))
+names(gcdata.tmp) <- sampleid.counts
+
+# Collect 10x QC metrix for plotting 
+# Send in gcdata.tmp so the QCs are only done on the samples we have counts info for 
+# qc.10x <- QC10x(qc.files, figures.dir, gcdata.tmp, exp.title = name.project) 
+
+# INCLUDED BELOW ARE JUST THE QC TABLE ASPECTS OF QC10x
+
+# Files to write containing 10x quality control metrics.
+# 1. tsv file containing quality control metrics that have been concatenated across several samples.
+# 2. Plot of fraction of reads mapping to different genomic regions.
+# 3. Plots of reads and genes per cell.
+qc.table.file <- paste0(figures.dir, "metrics_summary_all.tsv")
+# qc.genic.file <- paste0(figures.dir, "qc_genic_regions.png")
+# qc.plotstats.file <- paste0(figures.dir, "qc_plotstats.png")
+
+# Iterate over quality control metrics files, and collect the metrics for each sample into a dataframe.
+qc <- data.frame()
+sampleid <- names(qc.files)   # names of experimental replicates
+for (sample in sampleid) {
+qc.add <- read.table(qc.files[sample], header = T, sep = ",",
+                 check.names = F, stringsAsFactors = F)[,c(1:4, 6, 11:17, 19:20)]
+qc <- rbind(qc, qc.add)
+}
+qc$`Number of Reads` <- as.numeric(gsub(",", "", as.character(qc$`Number of Reads`)))  # remove commas
+rownames(qc) <- sampleid
+
+# If Seurat object available, update a few quality metrics after the filtering.
+stopifnot(all.equal(names(gcdata.tmp), names(qc.files)))  # check the samples correspond to one another
+qc$`Estimated Number of Cells` <- sapply(gcdata.tmp, function(data) length(data@ident))
+qc$`Median Genes per Cell` <- sapply(gcdata.tmp, function(data) as.integer(median(data@meta.data$nGene)))
+qc$`Median UMI Counts per Cell` <- sapply(gcdata.tmp, function(data) as.integer(median(data@meta.data$nUMI)))
+qc$`Mean Reads per Cell` <- sapply(gcdata.tmp, function(data) as.integer(mean(data@meta.data$nRead)))
+qc$`Total Genes Detected` <- sapply(gcdata.tmp, function(data) nrow(data@data))
+
+# Write quality metrics for all samples to file.
+write.table(t(qc), qc.table.file, sep = "\t", quote = F)
+
+# Plot fraction of reads mapping to different genomic regions.
+# For each sample, store fraction of reads mapping to different genomic regions in dataframe.
+qc.colnames <- c("genome", "exon", "intron", "intergene", "transcriptome", "sample")
+# Remove percent symbols from fraction mapping reads.
+# If there is only one sample, the result of apply is a vector, which then needs to be transposed.
+if (length(sampleid) > 1) {
+qc.genic <- data.frame(apply(qc[,c("Reads Mapped Confidently to Genome",
+                               "Reads Mapped Confidently to Exonic Regions",
+                               "Reads Mapped Confidently to Intronic Regions",
+                               "Reads Mapped Confidently to Intergenic Regions",
+                               "Reads Mapped Confidently to Transcriptome")],
+                         2, function(x) as.numeric(sub("%", "", x))))
+} else {
+qc.genic <- data.frame(t(apply(qc[,c("Reads Mapped Confidently to Genome",
+                                 "Reads Mapped Confidently to Exonic Regions",
+                                 "Reads Mapped Confidently to Intronic Regions",
+                                 "Reads Mapped Confidently to Intergenic Regions",
+                                 "Reads Mapped Confidently to Transcriptome")],
+                           2, function(x) as.numeric(sub("%", "", x)))))
+}
+exp.labels <- sampleid
+qc.genic$sample <- exp.labels  # mark what sample these statistics come from
+colnames(qc.genic) <- qc.colnames
+
+# Add new info to seurat objects
+
+# Rename cells to original naming 
+gcdata.tmp <- lapply(sampleid.counts, function(x) gcdata.tmp[[x]] <- RenameCells(gcdata.tmp[[x]], new.names = paste0(x, '-', rownames(gcdata.tmp[[x]]@meta.data))))
+names(gcdata.tmp) <- sampleid.counts
+
+# Let's add nReads to gcdata
+n.reads <- c()
+barcodes <- c()
+for (i in 1:length(sampleid.counts)){ 
+        n.reads <- c(n.reads, gcdata.tmp[[i]]@meta.data$nRead)
+        barcodes <- c(barcodes, rownames(gcdata.tmp[[i]]@meta.data))
+}
+reads.df <- data.frame(nReads = n.reads)
+rownames(reads.df) <- barcodes
+
+gcdata <- lapply(sampleid.cumulus, function(x) gcdata[[x]] <- AddMetaData(gcdata[[x]],reads.df))
+names(gcdata) <- sampleid.cumulus
+
+# save progress
+save(gcdata, qc, qc.genic, file=Rda.seurat.annotate.10xQC)
+
+```
+## Plot QCs etc.
+```{r plubication QC plots, eval = T}
+load(Rda.seurat.annotate.10xQC)
+
+for (f in 1:length(figures)){ 
+        
+        # set up plot naming variables 
+        samples <- figures[[f]][['samples']]
+        patient <- figures[[f]][['patient']]
+        labels <- figures[[f]][['labels']]
+        # prot.labs <- figures[[f]][['prot.labs']]
+
+        colors <- c("#e9a404", "#30699c", "#d04c71", "#358879", "#cd752a", "#538cb3")
+        
+        
+        if (length(samples)>1){
+                # # Use this if there are multiple protocols
+                gcdata.merge <- MergeMultipleSeuratObjects(gcdata[samples], project=paste0("NSCLC_", patient))
+                gcdata.merge <- SetIdent(gcdata.merge, id=gcdata.merge@meta.data$Condition)
+        } else { 
+                # Use this if there is a single protocol
+                gcdata.merge <- gcdata[[samples]]
+                gcdata.merge <- SetIdent(gcdata.merge, id=gcdata.merge@meta.data$Condition)
+        }
+        
+        
+        # # geom_violin looks different when I plot it this way than with ggplot
+        # test <- VlnPlot(gcdata.merge, "nGene", ident.include=gcdata.merge@meta.data$Condition, point.size.use=0) +
+        #         geom_violin(draw_quantiles = c(0.25, 0.75), fill="transparent", color="black", size=0.5) +
+        #         stat_summary(fun.y="median", geom="point", color="black", fill="white", size=1.3, shape=21) +
+        
+        df <- data.frame(nGene=gcdata.merge@meta.data$nGene, nUMI=gcdata.merge@meta.data$nUMI,
+                         mito=gcdata.merge@meta.data$percent_mito, nRead = gcdata.merge@meta.data$nRead,
+                         Condition=gcdata.merge@meta.data$Condition)
+        
+        # Violin plot of nGene
+        violin.p1 <- ggplot(df, aes(x=Condition, y=nGene, fill=Condition)) +
+                geom_violin(scale="width") +
+                scale_fill_manual(values = colors) +
+                labs(x="Condition", y="No. of genes/cell", title=patient) +
+                theme(strip.background = element_blank(),
+                      legend.position = "none",
+                      axis.text.x=element_text(size=8, family="Helvetica", angle=0, hjust=0.5),
+                      axis.text.y=element_text(size=8, family="Helvetica", hjust=1),
+                      text=element_text(size=8, family="Helvetica"),
+                      axis.line.x = element_line(color = 'black', size = 0.75),
+                      axis.line.y = element_line(color = 'black', size = 0.75),
+                      axis.ticks.x = element_line(color = 'black', size = 0.75),
+                      axis.ticks.y = element_line(color = 'black', size = 0.75),
+                      axis.title.y = element_text(size=8, family="Helvetica", margin = margin(0, 2, 0, 0)),
+                      axis.title.x = element_text(size=8, family="Helvetica", margin = margin(1, 0, 0, 0)),
+                      aspect.ratio = 1, plot.margin = unit(c(.1, .1, .1, .1), "cm"),
+                      plot.background = element_blank(),
+                      plot.title = element_text(size=8, family="Helvetica")) +
+                scale_x_discrete(labels=all.short.labs) +
+                      # panel.background = element_rect(color="black", size = 0.75, linetype = "solid"),
+                geom_violin(draw_quantiles = c(0.25, 0.75), fill="transparent", color="black", size=0.5) +
+                stat_summary(fun.y="median", geom="point", color="black", fill="white", size=1.3, shape=21)
+        
+        # Violin plot of nUMI
+        violin.p2 <- ggplot(df, aes(x=Condition, y=nUMI, fill=Condition)) +
+                geom_violin(scale="width") +
+                scale_fill_manual(values = colors) +
+                labs(x="Condition", y="No. of UMI/cell", title=patient) +
+                theme(strip.background = element_blank(),
+                      legend.position = "none",
+                      axis.text.x=element_text(size=8, family="Helvetica", angle=0, hjust=0.5),
+                      axis.text.y=element_text(size=8, family="Helvetica", hjust=1),
+                      text=element_text(size=8, family="Helvetica"),
+                      axis.line.x = element_line(color = 'black', size = 0.75),
+                      axis.line.y = element_line(color = 'black', size = 0.75),
+                      axis.ticks.x = element_line(color = 'black', size = 0.75),
+                      axis.ticks.y = element_line(color = 'black', size = 0.75),
+                      axis.title.y = element_text(size=8, family="Helvetica", margin = margin(0, 2, 0, 0)),
+                      axis.title.x = element_text(size=8, family="Helvetica", margin = margin(1, 0, 0, 0)),
+                      aspect.ratio = 1, plot.margin = unit(c(.1, .1, .1, .1), "cm"),
+                      plot.background = element_blank(),
+                      plot.title = element_text(size=8, family="Helvetica")) +
+                scale_x_discrete(labels=all.short.labs) +
+                      # panel.background = element_rect(color="black", size = 0.75, linetype = "solid"),
+                geom_violin(draw_quantiles = c(0.25, 0.75), fill="transparent", color="black", size=0.5) +
+                stat_summary(fun.y="median", geom="point", color="black", fill="white", size=1.3, shape=21)
+        
+        # Violin plot of mito
+        violin.p3 <- ggplot(df, aes(x=Condition, y=mito, fill=Condition)) +
+                geom_violin(scale="width") +
+                scale_fill_manual(values = colors) +
+                labs(x="Condition", y="Fraction mito. genes", title=patient) +
+                theme(strip.background = element_blank(),
+                      legend.position = "none",
+                      axis.text.x=element_text(size=8, family="Helvetica", angle=0, hjust=0.5),
+                      axis.text.y=element_text(size=8, family="Helvetica", hjust=1),
+                      text=element_text(size=8, family="Helvetica"),
+                      axis.line.x = element_line(color = 'black', size = 0.75),
+                      axis.line.y = element_line(color = 'black', size = 0.75),
+                      axis.ticks.x = element_line(color = 'black', size = 0.75),
+                      axis.ticks.y = element_line(color = 'black', size = 0.75),
+                      axis.title.y = element_text(size=8, family="Helvetica", margin = margin(0, 2, 0, 0)),
+                      axis.title.x = element_text(size=8, family="Helvetica", margin = margin(1, 0, 0, 0)),
+                      aspect.ratio = 1, plot.margin = unit(c(.1, .1, .1, .1), "cm"),
+                      plot.background = element_blank(),
+                      plot.title = element_text(size=8, family="Helvetica")) +
+                      # panel.background = element_rect(color="black", size = 0.75, linetype = "solid"),
+                scale_x_discrete(labels=all.short.labs) +
+                geom_violin(draw_quantiles = c(0.25, 0.75), fill="transparent", color="black", size=0.5) +
+                stat_summary(fun.y="median", geom="point", color="black", fill="white", size=1.3, shape=21)
+        
+        # Violin plot of mito
+        violin.p4 <- ggplot(df, aes(x=Condition, y=nRead, fill=Condition)) +
+                geom_violin(scale="width") +
+                scale_fill_manual(values = colors) +
+                labs(x="Condition", y="No. of reads/cell", title=patient) +
+                theme(strip.background = element_blank(),
+                      legend.position = "none",
+                      axis.text.x=element_text(size=8, family="Helvetica", angle=0, hjust=0.5),
+                      axis.text.y=element_text(size=8, family="Helvetica", hjust=1),
+                      text=element_text(size=8, family="Helvetica"),
+                      axis.line.x = element_line(color = 'black', size = 0.75),
+                      axis.line.y = element_line(color = 'black', size = 0.75),
+                      axis.ticks.x = element_line(color = 'black', size = 0.75),
+                      axis.ticks.y = element_line(color = 'black', size = 0.75),
+                      axis.title.y = element_text(size=8, family="Helvetica", margin = margin(0, 2, 0, 0)),
+                      axis.title.x = element_text(size=8, family="Helvetica", margin = margin(1, 0, 0, 0)),
+                      aspect.ratio = 1, plot.margin = unit(c(.1, .1, .1, .1), "cm"),
+                      plot.background = element_blank(),
+                      plot.title = element_text(size=8, family="Helvetica")) +
+                      # panel.background = element_rect(color="black", size = 0.75, linetype = "solid"),
+                scale_x_discrete(labels=all.short.labs) +
+                geom_violin(draw_quantiles = c(0.25, 0.75), fill="transparent", color="black", size=0.5) +
+                stat_summary(fun.y="median", geom="point", color="black", fill="white", size=1.3, shape=21)
+        
+        # Bar plots of number of detected cells
+        df2 <- as.data.frame(table(gcdata.merge@meta.data$Condition))
+        colnames(df2) <- c("Condition", "nCell")
+        col.plot1 <- ggplot(df2, aes(Condition, nCell)) +
+                        geom_col(aes(fill=Condition), color="black") +
+                        scale_fill_manual(values = colors) +
+                        labs(x="Condition", y="Total cells", title=patient) +
+                        theme(strip.background = element_blank(),
+                              legend.position = "none",
+                              axis.text.x=element_text(size=8, family="Helvetica", angle=0, hjust=0.5),
+                              axis.text.y=element_text(size=8, family="Helvetica", hjust=1),
+                              text=element_text(size=8, family="Helvetica"),
+                              axis.line.x = element_line(color = 'black', size = 0.75),
+                              axis.line.y = element_line(color = 'black', size = 0.75),
+                              axis.ticks.x = element_line(color = 'black', size = 0.75),
+                              axis.ticks.y = element_line(color = 'black', size = 0.75),
+                              axis.title.y = element_text(size=8, family="Helvetica", margin = margin(0, 2, 0, 0)),
+                              axis.title.x = element_text(size=8, family="Helvetica", margin = margin(1, 0, 0, 0)),
+                              aspect.ratio = 1, plot.margin = unit(c(.1, .1, .1, .1), "cm"),
+                              plot.background = element_blank(),
+                              plot.title = element_text(size=8, family="Helvetica")) +
+                        scale_x_discrete(labels=all.short.labs)
+        
+        # Bar plots of number of reads and saturation 
+        df3 <- data.frame(reads = qc$`Number of Reads`, saturation=qc$`Sequencing Saturation`, Condition=rownames(qc))
+        df3 <- df3[(df3$Condition %in% samples),]
+        df3$saturation <- as.numeric(gsub('%', '', df3$saturation))
+        col.plot2 <- ggplot(df3, aes(Condition, reads)) +
+                        geom_col(aes(fill=Condition), color="black") +
+                        scale_fill_manual(values = colors) +
+                        labs(x="Condition", y="Total reads", title=patient) +
+                        theme(strip.background = element_blank(),
+                              legend.position = "none",
+                              axis.text.x=element_text(size=8, family="Helvetica", angle=0, hjust=0.5),
+                              axis.text.y=element_text(size=8, family="Helvetica", hjust=1),
+                              text=element_text(size=8, family="Helvetica"),
+                              axis.line.x = element_line(color = 'black', size = 0.75),
+                              axis.line.y = element_line(color = 'black', size = 0.75),
+                              axis.ticks.x = element_line(color = 'black', size = 0.75),
+                              axis.ticks.y = element_line(color = 'black', size = 0.75),
+                              axis.title.y = element_text(size=8, family="Helvetica", margin = margin(0, 2, 0, 0)),
+                              axis.title.x = element_text(size=8, family="Helvetica", margin = margin(1, 0, 0, 0)),
+                              aspect.ratio = 1, plot.margin = unit(c(.1, .1, .1, .1), "cm"),
+                              plot.background = element_blank(),
+                              plot.title = element_text(size=8, family="Helvetica")) +
+                        scale_x_discrete(labels=all.short.labs)
+        col.plot3 <- ggplot(df3, aes(Condition, saturation)) +
+                        geom_col(aes(fill=Condition), color="black") +
+                        scale_fill_manual(values = colors) +
+                        scale_y_continuous(breaks=seq(0,100,20), limits = c(0, 100)) +
+                        labs(x="Condition", y="% Saturation", title=patient) +
+                        theme(strip.background = element_blank(),
+                              legend.position = "none",
+                              axis.text.x=element_text(size=8, family="Helvetica", angle=0, hjust=0.5),
+                              axis.text.y=element_text(size=8, family="Helvetica", hjust=1),
+                              text=element_text(size=8, family="Helvetica"),
+                              axis.line.x = element_line(color = 'black', size = 0.75),
+                              axis.line.y = element_line(color = 'black', size = 0.75),
+                              axis.ticks.x = element_line(color = 'black', size = 0.75),
+                              axis.ticks.y = element_line(color = 'black', size = 0.75),
+                              axis.title.y = element_text(size=8, family="Helvetica", margin = margin(0, 2, 0, 0)),
+                              axis.title.x = element_text(size=8, family="Helvetica", margin = margin(1, 0, 0, 0)),
+                              aspect.ratio = 1, plot.margin = unit(c(.1, .1, .1, .1), "cm"),
+                              plot.background = element_blank(),
+                              plot.title = element_text(size=8, family="Helvetica")) +
+                        scale_x_discrete(labels=all.short.labs)
+        
+        # Align axes of all the plots 
+        h = 1.8
+        w = 1.8
+        all.p <- align_plots(violin.p1, violin.p2, violin.p3, violin.p4, col.plot1, col.plot2, col.plot3, align="hv", axis="tblr")
+        save_plot(paste0(figures.final, "QC_NSCLC_", patient, "_nGene.pdf"), ggdraw(all.p[[1]]), base_height = h, base_width = w)
+        save_plot(paste0(figures.final, "QC_NSCLC_", patient, "_nUMI.pdf"), ggdraw(all.p[[2]]), base_height = h, base_width = w)
+        save_plot(paste0(figures.final, "QC_NSCLC_", patient, "_mito.pdf"), ggdraw(all.p[[3]]), base_height = h, base_width = w)
+        save_plot(paste0(figures.final, "QC_NSCLC_", patient, "_nRead.pdf"), ggdraw(all.p[[4]]), base_height = h, base_width = w)
+        save_plot(paste0(figures.final, "QC_NSCLC_", patient, "_nCell.pdf"), ggdraw(all.p[[5]]), base_height = h, base_width = w)
+        save_plot(paste0(figures.final, "QC_NSCLC_", patient, "_totalReads.pdf"), ggdraw(all.p[[6]]), base_height = h, base_width = w)
+        save_plot(paste0(figures.final, "QC_NSCLC_", patient, "_saturation.pdf"), ggdraw(all.p[[7]]), base_height = h, base_width = w)
+        
+        
+        # make a summary table of all stats
+        nGene_med <- df %>% group_by(Condition) %>% summarise(nGene_med=median(c(nGene)))
+        nUMI_med <- df %>% group_by(Condition) %>% summarise(nUMI_med=median(c(nUMI)))
+        mito_med <- df %>% group_by(Condition) %>% summarise(mito_med=median(c(mito)))
+        nRead_med <- df %>% group_by(Condition) %>% summarise(nRead_med=median(c(nRead)))
+
+        qc.summary.table <- merge(df2, df3)
+        qc.summary.table <- merge(qc.summary.table, nGene_med)
+        qc.summary.table <- merge(qc.summary.table, nUMI_med)
+        qc.summary.table <- merge(qc.summary.table, mito_med)
+        qc.summary.table <- merge(qc.summary.table, nRead_med)
+
+        write.table(qc.summary.table, paste0(figures.final, "QC_NSCLC_", patient, "_summaryQCs.csv"),
+                  col.names=TRUE, row.names=FALSE, sep=",")
+
+        # Plot genic regions 
+        # Gather QC dataframe into genomic region : percent mapping key-value pairs for making bar plots. 
+        qc.colnames <- c("genome", "intergene", "transcriptome", "sample", "lab")
+        # labels 
+        exp.labels <- labels
+        exp.title <- patient
+        # subset qc.genic and create a labels column 
+        qc.genic.subset <- subset(qc.genic, (qc.genic$sample %in% samples))
+        qc.genic.subset <- qc.genic.subset[,c("genome", "intergene", "transcriptome", "sample")]
+        qc.genic.subset$lab <- qc.genic.subset$sample
+        for (s in samples) {
+                qc.genic.subset$lab <- gsub(s, all.short.labs[[s]], qc.genic.subset$lab)
+        }
+        qc.bar <- gather(qc.genic.subset, "region", "percent", c(1:3))
+        # Set order in which genic regions and samples are plotted in barplot
+        qc.bar$region <- factor(qc.bar$region, levels = c("genome", "transcriptome", "intergene"))
+        qc.bar$lab <- factor(qc.bar$lab, levels=labels)
+        
+        plot.genic <- ggplot(data = qc.bar) + 
+                geom_bar(stat = "identity", mapping = aes(x = region, y = percent, fill = lab), 
+                         position = position_dodge(), color = "black") +
+                scale_y_continuous(breaks=seq(0,100,20), limits = c(0, 100)) +
+                labs(x="Region", y="% Bases Mapping") + 
+                scale_fill_manual(name="Condition", values=colors) + 
+                theme(strip.background = element_blank(),
+                        legend.position = "right",
+                        legend.text = element_text(size=8, family="Helvetica"),
+                        legend.margin=margin(0,0,0,0),
+                        legend.box.margin=margin(-10,0,-10,-10),
+                        legend.title = element_text(size=8, family="Helvetica"),
+                        legend.key.size = unit(.4, "cm"),
+                        axis.text.x=element_text(size=8, family="Helvetica", angle=90, vjust=0.5, hjust=1),
+                        axis.text.y=element_text(size=8, family="Helvetica", hjust=1),
+                        text=element_text(size=8, family="Helvetica"),
+                        axis.line.x = element_line(color = 'black', size = 0.75),
+                        axis.line.y = element_line(color = 'black', size = 0.75),
+                        axis.ticks.x = element_line(color = 'black', size = 0.75),
+                        axis.ticks.y = element_line(color = 'black', size = 0.75),
+                        axis.title.y = element_text(size=8, family="Helvetica", margin = margin(0, 2, 0, 0)),
+                        axis.title.x = element_blank(), #element_text(size=8, family="Helvetica", margin = margin(1, 0, 0, 0)),
+                        aspect.ratio = 1, plot.margin = unit(c(.1, .1, .1, .1), "cm"),
+                        plot.background = element_blank(),
+                        plot.title = element_text(size=8, family="Helvetica")) +
+                ggtitle(exp.title)
+        ggsave(paste0(figures.final, "QC_NSCLC_", patient, "_genic_regions.pdf"), plot.genic, width = 2.4, height = 2.4)
+        
+
+}
+
+```
+
+
+``` {r make final seurat object, eval = T}
+
+# merge all seurat object meta data into one seurat object 
+load(Rda.cumulus.scrublet.emptydrops.path)
+gcdata1 <- gcdata # assumes that Rda.cumulus.scrublet.emptydrops.path was already loaded in 
+load(Rda.seurat.annotate.10xQC)
+# gcdata2 <- gcdata
+# load(Rda.inferCNV)
+
+for (i in sampleid.cumulus) { 
+        gcdata[[i]] = AddMetaData(gcdata[[i]], gcdata1[[i]]@meta.data[,c('doublet', 'doubletscore', 'emptydrop')])
+}
+
+# lapply(sampleid.cumulus, function(x) gcdata[[x]] = AddMetaData(gcdata[[x]], gcdata1[[x]]@meta.data[,c('doublet', 'doubletscore', 'emptydrop')]))
+names(gcdata) <- sampleid.cumulus
+save(gcdata, file=Rda.seurat.final)
+
+gcdata <- lapply(names(gcdata), function(x) gcdata[[x]] <- RunUMAP(gcdata[[x]], min_dist=0.5, spread=1, metric="euclidean", n_neighbors=15, dims.use = 1:50))
+names(gcdata) <- sampleid.cumulus
+
+save(gcdata, file=Rda.seurat.final.umap)
+
+```
+
+```{r plot annotation and condition, eval = T}
+
+sampleid.cumulus <- c("NSCLC14_C4", "NSCLC14_PDEC", "NSCLC14_LE", "NSCLC14_combined")
+
+load(Rda.seurat.final.umap)
+
+colors <- c("#66C2A5", "#A6CEE3", "#E41A1C")
+
+cell.types <- c("T cell", "NK cell", "Mast cell", "Macrophage", "Fibroblast", "Endothelial cell", "Epithelial cell", 
+                "B cell", "Hepatocyte",
+                "Melanocyte", "Lymphatic endothelial", "Fibrocyte/doublet", "Fibrocyte/empty", 
+                "Neuroendocrine", "Neural crest", "Astrocyte", "Erythrocyte", "Skeletal", "Epithelial/empty", "Zona glomerulosa")
+index <- order(cell.types)
+cell.types <- cell.types[index]
+
+mh.colors <- c("#000000", "#0072B2", "#56B4E9", "#CC79A7", "#009E73", "#D55E00", "#E69F00", "#F0E442", 
+                          "#14D2DC", "#82A0BE", "#96B400", "#FA5078", "#DC8282", "#FAE6BE", "#A0FA82", "#AABE8C", 
+                          "#8214A0", "#FA2800","#BE8C3C", "#F06ED2")
+mh.colors <- mh.colors[index]
+mh.colors <- as.data.frame(mh.colors)
+# mh.colors <- data.frame(colors=material.heat(length(cell.types)))
+# rownames(mh.colors) <- cell.types
+
+rownames(mh.colors) <- cell.types 
+colnames(mh.colors) <- "colors"
+
+### HAVE COMBINED AND INDIVIDUAL ANNOTATIONS 
+
+for (id in seq(sampleid.cumulus)){
+        # annotate
+        df <- data.frame(gcdata[[id]]@dr$umap@cell.embeddings, annotate = gcdata[[id]]@meta.data$annotate)
+        df$annotate <- factor(df$annotate, levels=cell.types)
+         p1 <- ggplot(data = df) +
+                geom_point(mapping = aes(UMAP1, UMAP2, color = annotate), size = 0.01, shape=19) +
+                labs(color = "cell type", title=sampleid.cumulus.titles[id]) +
+                scale_colour_manual(values = as.matrix(mh.colors[sort(unique(df$annotate)), 'colors'])) +
+                guides(colour = guide_legend(override.aes = list(size=5))) +
+                theme(axis.text = element_text(size=8, family="Helvetica"),
+                      legend.position = "right",
+                      legend.text = element_text(size=8, family="Helvetica"),
+                      legend.margin=margin(0,0,0,0),
+                      legend.box.margin=margin(-10,0,-10,-10),
+                      legend.title = element_text(size=8, family="Helvetica"),
+                      legend.key.size = unit(.1, "cm"),
+                      axis.line.x = element_line(color = 'black', size = 0.75),
+                      axis.line.y = element_line(color = 'black', size = 0.75),
+                      axis.ticks.x = element_line(color = 'black', size = 0.75),
+                      axis.ticks.y = element_line(color = 'black', size = 0.75),
+                      axis.title.y = element_text(size=8, family="Helvetica", margin = margin(0, 1, 0, 0)),
+                      axis.title.x = element_text(size=8, family="Helvetica", margin = margin(1, 0, 0, 0)),
+                      aspect.ratio = 1, plot.margin = unit(c(.1, .3, .1, .1), "cm"),
+                      plot.background = element_blank(),
+                      plot.title = element_text(size=8, family="Helvetica")) +
+                guides(color = guide_legend(override.aes = list(size=2)))
+                # geom_label(data = centers, mapping = aes(x = x, y = y, label = annotate), size = 2.5,
+                # color = "black", show.legend = F, alpha = 0.75) +
+                # guides(colour = guide_legend(override.aes = list(size=1)))
+        # save_plot(paste0(figures.final, "QC_NSCLC_", sampleid.cumulus[id], "_annotate.pdf"), p1, base_height = 3.5, base_width = 3.5)
+
+        # condition 
+        df2 <- data.frame(gcdata[[id]]@dr$umap@cell.embeddings, Condition = gcdata[[id]]@meta.data$Replicate)
+        df2$lab <- df2$Condition
+        for (s in unique(df2$Condition)) {
+                df2$lab <- gsub(s, all.short.labs[[s]], df2$lab)
+        }
+        p2 <- ggplot(data = df2) +
+                geom_point(mapping = aes(UMAP1, UMAP2, color = lab), size = 0.01, shape=19) +
+                labs(color = "Condition", title=sampleid.cumulus.titles[id]) +
+                scale_colour_manual(values = colors) +
+                guides(colour = guide_legend(override.aes = list(size=5))) +
+                theme(axis.text = element_text(size=8, family="Helvetica"),
+                      legend.position = "right",
+                      legend.text = element_text(size=8, family="Helvetica"),
+                      legend.margin=margin(0,0,0,0),
+                      legend.box.margin=margin(-10,0,-10,-10),
+                      legend.title = element_text(size=8, family="Helvetica"),
+                      legend.key.size = unit(.1, "cm"),
+                      axis.line.x = element_line(color = 'black', size = 0.75),
+                      axis.line.y = element_line(color = 'black', size = 0.75),
+                      axis.ticks.x = element_line(color = 'black', size = 0.75),
+                      axis.ticks.y = element_line(color = 'black', size = 0.75),
+                      axis.title.y = element_text(size=8, family="Helvetica", margin = margin(0, 1, 0, 0)),
+                      axis.title.x = element_text(size=8, family="Helvetica", margin = margin(1, 0, 0, 0)),
+                      aspect.ratio = 1, plot.margin = unit(c(.1, .1, .1, .1), "cm"),
+                      plot.background = element_blank(),
+                      plot.title = element_text(size=8, family="Helvetica")) +
+                guides(color = guide_legend(override.aes = list(size=2)))
+        # save_plot(paste0(figures.final, "QC_NSCLC_", sampleid.counts[id], "_condition.pdf"), p2, base_height = 2.5, base_width = 2.5)
+            
+        p2.leg <- ggplot(data = df2) +
+                geom_point(mapping = aes(UMAP1, UMAP2, color = lab), size =-1, shape=19) +
+                labs(color = "Condition", title=sampleid.cumulus.titles[id]) +
+                scale_colour_manual(values = colors) +
+                guides(colour = guide_legend(override.aes = list(size=5))) +
+                theme(axis.text = element_blank(),
+                      legend.position = "right",
+                      legend.text = element_text(size=8, family="Helvetica"),
+                      legend.margin=margin(0,0,0,0),
+                      legend.box.margin=margin(-10,0,-10,-10),
+                      legend.title = element_text(size=8, family="Helvetica"),
+                      legend.key.size = unit(.1, "cm"),
+                      axis.line.x = element_blank(),
+                      axis.line.y = element_blank(),
+                      axis.ticks.x = element_blank(),
+                      axis.ticks.y = element_blank(),
+                      axis.title.y = element_blank(),
+                      axis.title.x = element_blank(),
+                      aspect.ratio = 1, plot.margin = unit(c(.1, .1, .1, .1), "cm"),
+                      plot.background = element_blank(),
+                      plot.title = element_blank()) +
+                guides(color = guide_legend(override.aes = list(size=2)))
+        ggsave(paste0(figures.final, "QC_NSCLC_", sampleid.cumulus[id],"_conditionLEGEND.pdf"), plot=p2.leg, height = 3.2, width = 3.2)
+
+        
+        # Plot each condition alone on the umap 
+        lab.list <- unique(df2$lab)
+        for (l in seq(lab.list)){
+                df2.condition.subset <- subset(df2, df2$lab==lab.list[l])
+                p2.subset <- ggplot() +
+                                geom_point(data = df2, mapping = aes(UMAP1, UMAP2), color="gray50", size = .01, shape=19) +
+                                geom_point(data = df2.condition.subset, mapping = aes(UMAP1, UMAP2), color = colors[l], size = .01, shape=19) +
+                                labs(color = "Condition", title=sampleid.cumulus.titles[id]) +
+                                # scale_colour_manual(values = colors) +
+                                guides(colour = guide_legend(override.aes = list(size=5))) +
+                                theme(axis.text = element_text(size=8, family="Helvetica"),
+                                      legend.position = "right",
+                                      legend.text = element_text(size=8, family="Helvetica"),
+                                      legend.margin=margin(0,0,0,0),
+                                      legend.box.margin=margin(-10,0,-10,-10),
+                                      legend.title = element_text(size=8, family="Helvetica"),
+                                      legend.key.size = unit(.1, "cm"),
+                                      axis.line.x = element_line(color = 'black', size = 0.75),
+                                      axis.line.y = element_line(color = 'black', size = 0.75),
+                                      axis.ticks.x = element_line(color = 'black', size = 0.75),
+                                      axis.ticks.y = element_line(color = 'black', size = 0.75),
+                                      axis.title.y = element_text(size=8, family="Helvetica", margin = margin(0, 1, 0, 0)),
+                                      axis.title.x = element_text(size=8, family="Helvetica", margin = margin(1, 0, 0, 0)),
+                                      aspect.ratio = 1, plot.margin = unit(c(.1, .1, .1, .1), "cm"),
+                                      plot.background = element_blank(),
+                                      plot.title = element_text(size=8, family="Helvetica")) +
+                                guides(color = guide_legend(override.aes = list(size=2)))
+                ggsave(paste0(figures.final, "QC_NSCLC_", sampleid.cumulus[id], "_", lab.list[l], "_condition.pdf"), plot=p2.subset, height = 2.3, width = 2.3)
+        }
+            
+        
+        all.p <- align_plots(p1, p2, p3, align="hv", axis="tblr")
+        p1x <- ggdraw(all.p[[1]])
+        p2x <- ggdraw(all.p[[2]])
+        save_plot(paste0(figures.final, "QC_NSCLC_", sampleid.cumulus[id], "_annotate.pdf"), p1x, base_height = 3.2, base_width = 3.2)
+
+        if (sampleid.cumulus[id] %in% condition.tsnes.plot) {
+                save_plot(paste0(figures.final, "QC_NSCLC_", sampleid.cumulus[id], "_condition.pdf"), p2x, base_height = 3.2, base_width = 3.2)
+        }
+        
+                # Bar plot of cell types 
+        # Cluster vs Experimental condition where row is cluster and column is experimental condition.
+        table.cluster.experiment <- table(gcdata[[id]]@meta.data$annotate, gcdata[[id]]@meta.data$Condition)
+        
+        # Within a cell cluster, what percent of cells come from each experimental condition?
+        # Within an experimental condition, what percent of cells are cell type 1,2,3,etc...?
+        freq.cluster.experiment <- table.cluster.experiment / rowSums(table.cluster.experiment) 
+        freq.experiment.cluster <- sweep(table.cluster.experiment, 2, colSums(table.cluster.experiment), '/') 
+        
+        # Across all cells, the frequency of cells coming from each experiment.
+        # Across all cells, the frequency of cells coming from each cell cluster.
+        freq.experiment <- prop.table(colSums(table.cluster.experiment))
+        freq.cluster <- prop.table(rowSums(table.cluster.experiment))  
+        
+        # Make bar plot of frequency of cell clusters found within each experiment.
+        df3 <- as.data.frame.matrix(freq.experiment.cluster)  # convert table to dataframe, and then gather key-values
+        df3["cluster"] <- rownames(df3)
+        df3 <- gather(df3, "experiment", "frequency", c(1:(ncol(df3)-1)))
+        df3$experiment <- factor(df3$experiment, levels = levels(gcdata[[id]]@meta.data$Condition))  # order samples
+        df3$cluster <- factor(df3$cluster, levels = cell.types)  # order by original cluster ordering
+        p3 <- ggplot(data = df3) + geom_bar(mapping = aes(x = experiment, y = frequency, fill = cluster), stat = "identity") + 
+                labs(x="Condition", y="Frequency", fill="cell type", title=sampleid.cumulus.titles[id]) + 
+                theme(legend.position = "right",
+                      legend.text = element_text(size=8, family="Helvetica"),
+                      legend.margin=margin(0,0,0,0),
+                      legend.box.margin=margin(-10,0,-10,-10),
+                      legend.title = element_text(size=8, family="Helvetica"),
+                      legend.key.size = unit(.3, "cm"),
+                      axis.text.x=element_text(size=8, family="Helvetica", angle=0, hjust=0.5),
+                      axis.text.y=element_text(size=8, family="Helvetica", hjust=1),
+                      text=element_text(size=8, family="Helvetica"),
+                      axis.line.x = element_line(color = 'black', size = 0.75),
+                      axis.line.y = element_line(color = 'black', size = 0.75),
+                      axis.ticks.x = element_line(color = 'black', size = 0.75),
+                      axis.ticks.y = element_line(color = 'black', size = 0.75),
+                      axis.title.y = element_text(size=8, family="Helvetica", margin = margin(0, 4, 0, 0)),
+                      axis.title.x = element_text(size=8, family="Helvetica", margin = margin(1, 0, 0, 0)),
+                      aspect.ratio = 1.3, plot.margin = unit(c(.1, .1, .1, .1), "cm"),
+                      plot.background = element_blank(),
+                      plot.title = element_text(size=8, family="Helvetica")) + 
+                scale_fill_manual(values=as.matrix(mh.colors[sort(unique(df$annotate)), 'colors'])) + 
+                scale_x_discrete(labels=all.short.labs)
+        if (sampleid.cumulus[id] %in% condition.tsnes.plot) {
+                ggsave(paste0(figures.final, "QC_NSCLC_", sampleid.cumulus[id], "_celltype_barplot.pdf"), width = 2.5, height = 2.5)
+        }
+        # # Make bar plot of frequency of experimental conditions found within each cell cluster.
+        # df4 <- as.data.frame.matrix(freq.cluster.experiment)  # convert table to dataframe, and then gather key-values
+        # df4["cluster"] <- rownames(df4)
+        # df4 <- gather(df4, "experiment", "frequency", c(1:(ncol(df4)-1)))
+        # df4$experiment <- factor(df4$experiment, levels = levels(gcdata[[id]]@meta.data$Condition))  # order samples
+        # df4$cluster <- factor(df4$cluster, levels = unique(df4$cluster))  # order by original cluster ordering
+        # p4 <- ggplot(data = df4) + 
+        #         geom_bar(mapping = aes(x = cluster, y = frequency, fill = experiment), stat = "identity") + 
+        #         theme(axis.text.x  = element_text(angle=90, hjust=1)) + 
+        #         scale_fill_manual(values=material.heat(length(levels(df4$experiment))))
+        # ggsave(paste0(figures.path[i], 'experiment_freq_bar_plot.png'), width = 6, height = 8)
+
+}
+
+```
+
+```{r plubication empty drop / doublet plots, eval = T}
+###########################
+# nice plots for empty drops and doublets
+# load(Rda.cumulus.scrublet.emptydrops.path)
+load(Rda.seurat.final.umap)
+
+for (id in seq(sampleid.cumulus)){
+        # empty drops
+        df <- data.frame(gcdata[[id]]@dr$umap@cell.embeddings, emptydrop = gcdata[[id]]@meta.data$emptydrop, Condition=gcdata[[id]]@meta.data$Channel)
+        df$emptydrop <- gsub("TRUE", "True", df$emptydrop)
+        df$emptydrop <- gsub("FALSE", "False", df$emptydrop)
+        df.true <- subset(df, emptydrop=="True")
+        df.false <- subset(df, emptydrop=="False")
+        # p1.noAx <- ggplot() +
+        #         geom_point(data = df.false, mapping = aes(UMAP1, UMAP2), color="gray50", size = 1) +
+        #         geom_point(data = df.true, mapping = aes(UMAP1, UMAP2), color = "red", size = 1) +
+        #         theme(plot.margin = unit(c(0, 0, -.12, -.12), "cm"), 
+        #               legend.position = "none", 
+        #               axis.text.x = element_blank(),
+        #               axis.text.y = element_blank(), 
+        #               axis.line.x = element_blank(), 
+        #               axis.line.y = element_blank(), 
+        #               axis.ticks.x = element_blank(), 
+        #               axis.ticks.y = element_blank(), 
+        #               axis.title.x = element_blank(), 
+        #               axis.title.y=element_blank(), 
+        #               plot.title = element_blank())
+        # ggsave(paste0(figures.final, '_tSNE_tmp.png'), width=4, height=4, units="in", dpi=1000)
+        # p1.noPt <- ggplot() +
+        p1 <- ggplot() +
+                # geom_point(data = df, mapping = aes(UMAP1, UMAP2, color=emptydrop), size = -1, shape=19) +
+                geom_point(data = df.false, mapping = aes(UMAP1, UMAP2), color="gray50", size = .1, shape=19) +
+                geom_point(data = df.true, mapping = aes(UMAP1, UMAP2), color = "red", size = .1, shape=19) +
+                labs(color = "empty drop", title=paste0("empty-",sampleid.cumulus.titles[id])) +
+                scale_colour_manual(values = c("gray50", "red")) +
+                guides(colour = guide_legend(override.aes = list(size=5))) +
+                theme(axis.text = element_text(size=8, family="Helvetica"),
+                      legend.position = "right",
+                      legend.text = element_text(size=8, family="Helvetica"),
+                      legend.margin=margin(0,0,0,0),
+                      legend.box.margin=margin(-10,0,-10,-10),
+                      legend.title = element_text(size=8, family="Helvetica"),
+                      legend.key.size = unit(.1, "cm"),
+                      axis.line.x = element_line(color = 'black', size = 0.75),
+                      axis.line.y = element_line(color = 'black', size = 0.75),
+                      axis.ticks.x = element_line(color = 'black', size = 0.75),
+                      axis.ticks.y = element_line(color = 'black', size = 0.75),
+                      axis.title.y = element_text(size=8, family="Helvetica", margin = margin(0, 1, 0, 0)),
+                      axis.title.x = element_text(size=8, family="Helvetica", margin = margin(1, 0, 0, 0)),
+                      aspect.ratio = 1, plot.margin = unit(c(.1, .3, .1, .1), "cm"),
+                      plot.background = element_blank(),
+                      plot.title = element_text(size=8, family="Helvetica")) +
+                guides(color = guide_legend(override.aes = list(size=2)))
+        # p1 <- AugmentPlot(p1.noPt, paste0(figures.final, '_tSNE_tmp.png'))
+
+
+        # doublets
+        df2 <- data.frame(gcdata[[id]]@dr$umap@cell.embeddings, doublet = gcdata[[id]]@meta.data$doublet, Condition=gcdata[[id]]@meta.data$Channel)
+        df2$doublet <- gsub("TRUE", "True", df2$doublet)
+        df2$doublet <- gsub("FALSE", "False", df2$doublet)
+        df2.true <- subset(df2, doublet=="True")
+        df2.false <- subset(df2, doublet="False")
+        # p2.noAx <- ggplot() +
+        #         geom_point(data = df2.false, mapping = aes(UMAP1, UMAP2), color="gray50", size = 1, shape=19) +
+        #         geom_point(data = df2.true, mapping = aes(UMAP1, UMAP2), color = "red", size = 1, shape=19) +
+        #         theme(plot.margin = unit(c(0, 0, -.12, -.12), "cm"), 
+        #               legend.position = "none", 
+        #               axis.text.x = element_blank(),
+        #               axis.text.y = element_blank(), 
+        #               axis.line.x = element_blank(), 
+        #               axis.line.y = element_blank(), 
+        #               axis.ticks.x = element_blank(), 
+        #               axis.ticks.y = element_blank(), 
+        #               axis.title.x = element_blank(), 
+        #               axis.title.y=element_blank(), 
+        #               plot.title = element_blank())
+        # ggsave(paste0(figures.final, '_tSNE_tmp.png'), width=4, height=4, units="in", dpi=1000)
+        # p2.noPt <- ggplot() +
+        p2 <- ggplot() + 
+                # geom_point(data = df2, mapping = aes(tSNE_1, tSNE_2, color=doublet), size = -1) +
+                geom_point(data = df2.false, mapping = aes(UMAP1, UMAP2), color="gray50", size = .1, shape=19) +
+                geom_point(data = df2.true, mapping = aes(UMAP1, UMAP2), color = "red", size = .1, shape=19) +
+                labs(color = "doublet", title=paste0("doublet-",sampleid.cumulus.titles[id])) +
+                scale_colour_manual(values = c("gray50", "red")) +
+                guides(colour = guide_legend(override.aes = list(size=5))) +
+                theme(axis.text = element_text(size=8, family="Helvetica"),
+                      legend.position = "right",
+                      legend.text = element_text(size=8, family="Helvetica"),
+                      legend.margin=margin(0,0,0,0),
+                      legend.box.margin=margin(-10,0,-10,-10),
+                      legend.title = element_text(size=8, family="Helvetica"),
+                      legend.key.size = unit(.1, "cm"),
+                      axis.line.x = element_line(color = 'black', size = 0.75),
+                      axis.line.y = element_line(color = 'black', size = 0.75),
+                      axis.ticks.x = element_line(color = 'black', size = 0.75),
+                      axis.ticks.y = element_line(color = 'black', size = 0.75),
+                      axis.title.y = element_text(size=8, family="Helvetica", margin = margin(0, 1, 0, 0)),
+                      axis.title.x = element_text(size=8, family="Helvetica", margin = margin(1, 0, 0, 0)),
+                      aspect.ratio = 1, plot.margin = unit(c(.1, .3, .1, .1), "cm"),
+                      plot.background = element_blank(),
+                      plot.title = element_text(size=8, family="Helvetica")) +
+                guides(color = guide_legend(override.aes = list(size=2)))
+        # p2 <- AugmentPlot(p2.noPt, paste0(figures.final, '_tSNE_tmp.png'))
+
+
+        all.p <- align_plots(p1, p2, align="hv", axis="tblr")
+        p1x <- ggdraw(all.p[[1]])
+        p2x <- ggdraw(all.p[[2]])
+        save_plot(paste0(figures.final, "QC_NSCLC_", sampleid.cumulus[id], "_emptydrops.pdf"), p1x, base_height = 2.3, base_width = 2.3)
+        save_plot(paste0(figures.final, "QC_NSCLC_", sampleid.cumulus[id], "_doublets.pdf"), p2x, base_height = 2.3, base_width = 2.3)
+        
+        # compute doublet and empty drop percentages and add to QC summary table
+        empty_frac <- df %>% group_by(Condition) %>% summarise(empty_frac=sum(emptydrop=="True")/length(Condition))
+        doublet_frac <- df2 %>% group_by(Condition) %>% summarise(doublet_frac=sum(doublet=="True")/length(Condition))
+        # qc.summary.table <- read.csv(paste0(figures.final, "QC_neuroblastoma_", patient, "_summaryQCs.csv"))
+        # qc.summary.table <- merge(qc.summary.table, empty_frac)
+        # qc.summary.table <- merge(qc.summary.table, doublet_frac)
+        emptyDoublet <- merge(empty_frac, doublet_frac)
+
+        write.table(emptyDoublet, paste0(figures.final, "QC_NSCLC_", sampleid.cumulus[id], "_summaryEmptyDoublet.csv"),
+                  col.names=TRUE, row.names=FALSE, sep=",")
+
+}
+
+
+```
+
+``` {r cell type specific QCs, eval = T}
+load(Rda.seurat.final.umap)
+names(gcdata) <- sampleid.cumulus
+
+samples = c("NSCLC14_C4", "NSCLC14_PDEC", "NSCLC14_LE")
+gcdata.merge <- MergeMultipleSeuratObjects(gcdata[samples], project="NSCLC14")
+gcdata.merge <- SetIdent(gcdata.merge, id=gcdata.merge@meta.data$Condition)
+
+
+for (id in c("14", "14MA", "14ML")){
+
+        # df <- data.frame(gcdata[[id]]@dr$tsne@cell.embeddings, emptydrop = gcdata[[id]]@meta.data$emptydrop, Condition=gcdata[[id]]@meta.data$Channel)
+        #         df$emptydrop <- gsub("TRUE", "True", df$emptydrop)
+        #         df$emptydrop <- gsub("FALSE", "False", df$emptydrop)
+        #         df.true <- subset(df, emptydrop=="True")
+        #         df.false <- subset(df, emptydrop=="False")
+        #         
+        #         df2 <- data.frame(gcdata[[id]]@dr$tsne@cell.embeddings, doublet = gcdata[[id]]@meta.data$doublet, Condition=gcdata[[id]]@meta.data$Channel)
+        #         df2$doublet <- gsub("TRUE", "True", df2$doublet)
+        #         df2$doublet <- gsub("FALSE", "False", df2$doublet)
+        #         df2.true <- subset(df2, doublet=="True")
+        #         df2.false <- subset(df2, doublet="False")
+        #         
+               
+        
+        df <- data.frame(nGene = gcdata[[id]]@meta.data$nGene, nUMI = gcdata[[id]]@meta.data$nUMI, nReads = gcdata[[id]]@meta.data$nReads, 
+                         mito = gcdata[[id]]@meta.data$percent_mito, annotate = gcdata[[id]]@meta.data$annotate, 
+                         emptydrop = gcdata[[id]]@meta.data$emptydrop, doublet = gcdata[[id]]@meta.data$doublet)
+        
+        df$emptydrop <- gsub("TRUE", "True", df$emptydrop)
+        df$emptydrop <- gsub("FALSE", "False", df$emptydrop)
+        df.true <- subset(df, emptydrop=="True")
+        df.false <- subset(df, emptydrop=="False")
+                
+        df$doublet <- gsub("TRUE", "True", df$doublet)
+        df$doublet <- gsub("FALSE", "False", df$doublet)
+        df.true <- subset(df, doublet=="True")
+        df.false <- subset(df, doublet="False")
+        
+        genes_celltype <- df %>% group_by(annotate) %>% summarise(nGene=median(nGene))
+        umi_celltype <- df %>% group_by(annotate) %>% summarise(nUMI=median(nUMI))
+        reads_celltype <- df %>% group_by(annotate) %>% summarise(nReads=median(nReads))
+        mito_celltype <- df %>% group_by(annotate) %>% summarise(mito=median(mito))
+        empty_frac <- df %>% group_by(annotate) %>% summarise(empty_frac=sum(emptydrop=="True")/length(annotate))
+        doublet_frac <- df %>% group_by(annotate) %>% summarise(doublet_frac=sum(doublet=="True")/length(annotate))
+        cells_celltype <- df %>% group_by(annotate) %>% summarise(nCells = length(annotate))
+
+        
+        QCs_celltype <- NULL
+        QCs_celltype <- merge(cells_celltype, genes_celltype)
+        QCs_celltype <- merge(QCs_celltype, umi_celltype)
+        QCs_celltype <- merge(QCs_celltype, reads_celltype)
+        QCs_celltype <- merge(QCs_celltype, mito_celltype)
+        QCs_celltype <- merge(QCs_celltype, empty_frac)
+        QCs_celltype <- merge(QCs_celltype, doublet_frac)
+        
+        write.table(QCs_celltype, paste0(figures.final, "QC_NSCLC_", id, "_celltypeQCs.csv"),
+                          col.names=TRUE, row.names=FALSE, sep=",")
+        
+        
+        # QCs after removing empty drops 
+        df_noED <- subset(df, df$emptydrop=="False")
+        
+        genes_celltype <- df_noED %>% group_by(annotate) %>% summarise(nGene=median(nGene))
+        umi_celltype <- df_noED %>% group_by(annotate) %>% summarise(nUMI=median(nUMI))
+        reads_celltype <- df_noED %>% group_by(annotate) %>% summarise(nReads=median(nReads))
+        mito_celltype <- df_noED %>% group_by(annotate) %>% summarise(mito=median(mito))
+        empty_frac <- df_noED %>% group_by(annotate) %>% summarise(empty_frac=sum(emptydrop=="True")/length(annotate))
+        doublet_frac <- df_noED %>% group_by(annotate) %>% summarise(doublet_frac=sum(doublet=="True")/length(annotate))
+        cells_celltype <- df_noED %>% group_by(annotate) %>% summarise(nCells = length(annotate))
+
+        QCs_celltype_noED <- NULL
+        QCs_celltype_noED <- merge(cells_celltype, genes_celltype)
+        QCs_celltype_noED <- merge(QCs_celltype_noED, umi_celltype)
+        QCs_celltype_noED <- merge(QCs_celltype_noED, reads_celltype)
+        QCs_celltype_noED <- merge(QCs_celltype_noED, mito_celltype)
+        QCs_celltype_noED <- merge(QCs_celltype_noED, empty_frac)
+        QCs_celltype_noED <- merge(QCs_celltype_noED, doublet_frac)
+        
+        write.table(QCs_celltype, paste0(figures.final, "QC_NSCLC_", id, "_celltypeQCs_noEmptyDrop.csv"),
+                          col.names=TRUE, row.names=FALSE, sep=",")
+}
+
+```
+
+```{r cell type specific QC plots, eval = T}
+load(Rda.seurat.final.umap)
+
+f = 1
+        # set up plot naming variables 
+        samples <- figures[[f]][['samples']]
+        patient <- figures[[f]][['patient']]
+        labels <- figures[[f]][['labels']]
+        # prot.labs <- figures[[f]][['prot.labs']]
+
+        colors <- c("#e9a404", "#30699c", "#d04c71", "#358879", "#cd752a", "#538cb3")
+        
+        
+        if (length(samples)>1){
+                # # Use this if there are multiple protocols
+                gcdata.merge <- MergeMultipleSeuratObjects(gcdata[samples], project=paste0("NSCLC_", patient))
+                gcdata.merge <- SetIdent(gcdata.merge, id=gcdata.merge@meta.data$Condition)
+        } else { 
+                # Use this if there is a single protocol
+                gcdata.merge <- gcdata[[samples]]
+                gcdata.merge <- SetIdent(gcdata.merge, id=gcdata.merge@meta.data$Condition)
+        }
+        
+        
+        df <- data.frame(nGene=gcdata.merge@meta.data$nGene, nUMI=gcdata.merge@meta.data$nUMI,
+                         mito=gcdata.merge@meta.data$percent_mito, nRead = gcdata.merge@meta.data$nRead,
+                         Condition=gcdata.merge@meta.data$Condition, annotate = gcdata.merge@meta.data$annotate)
+        
+        
+        type <- "vln"
+        for (a in unique(df$annotate)){
+                df.tmp <- subset(df, annotate==a)
+                
+                if (length(unique(df.tmp$Condition))!=length(levels(df.tmp$Condition))){
+                        to.add <- setdiff(levels(df.tmp$Condition), unique(df.tmp$Condition))
+                        for (ta in to.add){
+                                new.row <- data.frame(nGene=0, nUMI=0, mito=0, nRead=0, Condition=ta, 
+                                                      annotate=a, umiDup=0, umiSat=0)
+                                df.tmp <- rbind(df.tmp, new.row)
+                        }
+                }
+                
+                # Violin plot of nGene
+                p1 <- ggplot(df.tmp, aes(x=Condition, y=nGene, fill=Condition)) +
+                        # geom_boxplot(notch = FALSE, outlier.size = 0.5) +
+                        geom_violin(scale="width") +
+                        scale_fill_manual(values = colors) +
+                        labs(x="Condition", y="No. of genes/cell", title=a) +
+                        theme(strip.background = element_blank(),
+                              legend.position = "none",
+                              axis.text.x=element_text(size=8, family="Helvetica", angle=0, hjust=0.5),
+                              axis.text.y=element_text(size=8, family="Helvetica", hjust=1),
+                              text=element_text(size=8, family="Helvetica"),
+                              axis.line.x = element_line(color = 'black', size = 0.75),
+                              axis.line.y = element_line(color = 'black', size = 0.75),
+                              axis.ticks.x = element_line(color = 'black', size = 0.75),
+                              axis.ticks.y = element_line(color = 'black', size = 0.75),
+                              axis.title.y = element_text(size=8, family="Helvetica", margin = margin(0, 2, 0, 0)),
+                              axis.title.x = element_text(size=8, family="Helvetica", margin = margin(1, 0, 0, 0)),
+                              aspect.ratio = 1, plot.margin = unit(c(.1, .1, .1, .1), "cm"),
+                              plot.background = element_blank(), 
+                              plot.title = element_text(size=8, family="Helvetica")) +
+                        scale_x_discrete(labels=all.short.labs) +
+                              # panel.background = element_rect(color="black", size = 0.75, linetype = "solid"),
+                        geom_violin(draw_quantiles = c(0.25, 0.75), fill="transparent", color="black", size=0.5) +
+                        stat_summary(fun.y="median", geom="point", color="black", fill="white", size=1.3, shape=21)
+                
+                # Violin plot of nUMI
+                p2 <- ggplot(df.tmp, aes(x=Condition, y=nUMI, fill=Condition)) +
+                        # geom_boxplot(notch = FALSE, outlier.size = 0.5) +
+                        geom_violin(scale="width") +
+                        scale_fill_manual(values = colors) +
+                        labs(x="Condition", y="No. of UMI/cell", title=a) +
+                        theme(strip.background = element_blank(),
+                              legend.position = "none",
+                              axis.text.x=element_text(size=8, family="Helvetica", angle=0, hjust=0.5),
+                              axis.text.y=element_text(size=8, family="Helvetica", hjust=1),
+                              text=element_text(size=8, family="Helvetica"),
+                              axis.line.x = element_line(color = 'black', size = 0.75),
+                              axis.line.y = element_line(color = 'black', size = 0.75),
+                              axis.ticks.x = element_line(color = 'black', size = 0.75),
+                              axis.ticks.y = element_line(color = 'black', size = 0.75),
+                              axis.title.y = element_text(size=8, family="Helvetica", margin = margin(0, 2, 0, 0)),
+                              axis.title.x = element_text(size=8, family="Helvetica", margin = margin(1, 0, 0, 0)),
+                              aspect.ratio = 1, plot.margin = unit(c(.1, .1, .1, .1), "cm"),
+                              plot.background = element_blank(),
+                              plot.title = element_text(size=8, family="Helvetica")) +
+                        scale_x_discrete(labels=all.short.labs) +
+                              # panel.background = element_rect(color="black", size = 0.75, linetype = "solid"),
+                        geom_violin(draw_quantiles = c(0.25, 0.75), fill="transparent", color="black", size=0.5) +
+                        stat_summary(fun.y="median", geom="point", color="black", fill="white", size=1.3, shape=21)
+                
+                # Violin plot of mito
+                p3 <- ggplot(df.tmp, aes(x=Condition, y=mito, fill=Condition)) +
+                        # geom_boxplot(notch = FALSE, outlier.size = 0.5) +
+                        geom_violin(scale="width") +
+                        scale_fill_manual(values = colors) +
+                        labs(x="Condition", y="Fraction mito. genes", title=a) +
+                        theme(strip.background = element_blank(),
+                              legend.position = "none",
+                              axis.text.x=element_text(size=8, family="Helvetica", angle=0, hjust=0.5),
+                              axis.text.y=element_text(size=8, family="Helvetica", hjust=1),
+                              text=element_text(size=8, family="Helvetica"),
+                              axis.line.x = element_line(color = 'black', size = 0.75),
+                              axis.line.y = element_line(color = 'black', size = 0.75),
+                              axis.ticks.x = element_line(color = 'black', size = 0.75),
+                              axis.ticks.y = element_line(color = 'black', size = 0.75),
+                              axis.title.y = element_text(size=8, family="Helvetica", margin = margin(0, 2, 0, 0)),
+                              axis.title.x = element_text(size=8, family="Helvetica", margin = margin(1, 0, 0, 0)),
+                              aspect.ratio = 1, plot.margin = unit(c(.1, .1, .1, .1), "cm"),
+                              plot.background = element_blank(),
+                              plot.title = element_text(size=8, family="Helvetica")) +
+                              # panel.background = element_rect(color="black", size = 0.75, linetype = "solid"),
+                        scale_x_discrete(labels=all.short.labs) +
+                        geom_violin(draw_quantiles = c(0.25, 0.75), fill="transparent", color="black", size=0.5) +
+                        stat_summary(fun.y="median", geom="point", color="black", fill="white", size=1.3, shape=21)
+                
+                # Violin plot of reads
+                p4 <- ggplot(df.tmp, aes(x=Condition, y=nRead, fill=Condition)) +
+                        geom_violin(scale="width") +
+                        # geom_boxplot(notch = FALSE, outlier.size = 0.5) +
+                        scale_fill_manual(values = colors) +
+                        labs(x="Condition", y="No. of reads/cell", title=a) +
+                        theme(strip.background = element_blank(),
+                              legend.position = "none",
+                              axis.text.x=element_text(size=8, family="Helvetica", angle=0, hjust=0.5),
+                              axis.text.y=element_text(size=8, family="Helvetica", hjust=1),
+                              text=element_text(size=8, family="Helvetica"),
+                              axis.line.x = element_line(color = 'black', size = 0.75),
+                              axis.line.y = element_line(color = 'black', size = 0.75),
+                              axis.ticks.x = element_line(color = 'black', size = 0.75),
+                              axis.ticks.y = element_line(color = 'black', size = 0.75),
+                              axis.title.y = element_text(size=8, family="Helvetica", margin = margin(0, 2, 0, 0)),
+                              axis.title.x = element_text(size=8, family="Helvetica", margin = margin(1, 0, 0, 0)),
+                              aspect.ratio = 1, plot.margin = unit(c(.1, .1, .1, .1), "cm"),
+                              plot.background = element_blank(),
+                              plot.title = element_text(size=8, family="Helvetica")) +
+                              # panel.background = element_rect(color="black", size = 0.75, linetype = "solid"),
+                        scale_x_discrete(labels=all.short.labs) +
+                        geom_violin(draw_quantiles = c(0.25, 0.75), fill="transparent", color="black", size=0.5) +
+                        stat_summary(fun.y="median", geom="point", color="black", fill="white", size=1.3, shape=21)
+                
+                
+        
+        # Align axes of all the plots 
+        h = 1.8
+        w = 1.8
+        all.p <- align_plots(p1, p2, p3, p4, align="hv", axis="tblr")
+        save_plot(paste0(figures.final, "QC_NSCLC_", patient, "_nGene_", a, "_", type, ".pdf"), ggdraw(all.p[[1]]), base_height = h, base_width = w)
+        save_plot(paste0(figures.final, "QC_NSCLC_", patient, "_nUMI_", a, "_", type, ".pdf"), ggdraw(all.p[[2]]), base_height = h, base_width = w)
+        save_plot(paste0(figures.final, "QC_NSCLC_", patient, "_mito_", a, "_", type, ".pdf"), ggdraw(all.p[[3]]), base_height = h, base_width = w)
+        save_plot(paste0(figures.final, "QC_NSCLC_", patient, "_nRead_", a, "_", type, ".pdf"), ggdraw(all.p[[4]]), base_height = h, base_width = w)
+
+                
+        }
+        
+```
+
+```{r cell type specific QC stats, eval = T}
+load(Rda.seurat.final.umap)
+
+f = 1
+# set up plot naming variables 
+samples <- figures[[f]][['samples']]
+patient <- figures[[f]][['patient']]
+labels <- figures[[f]][['labels']]
+# prot.labs <- figures[[f]][['prot.labs']]
+
+colors <- c("#e9a404", "#30699c", "#d04c71", "#358879", "#cd752a", "#538cb3")
+
+if (length(samples)>1){
+        # # Use this if there are multiple protocols
+        gcdata.merge <- MergeMultipleSeuratObjects(gcdata[samples], project=paste0("NSCLC_", patient))
+        gcdata.merge <- SetIdent(gcdata.merge, id=gcdata.merge@meta.data$Condition)
+} else { 
+        # Use this if there is a single protocol
+        gcdata.merge <- gcdata[[samples]]
+        gcdata.merge <- SetIdent(gcdata.merge, id=gcdata.merge@meta.data$Condition)
+}
+
+
+df <- data.frame(nGene=gcdata.merge@meta.data$nGene, nUMI=gcdata.merge@meta.data$nUMI,
+                 mito=gcdata.merge@meta.data$percent_mito, nRead = gcdata.merge@meta.data$nRead,
+                 Condition=gcdata.merge@meta.data$Condition, annotate = gcdata.merge@meta.data$annotate)
+
+df.C4 <- subset(df, Condition=="C4")
+df.PDEC <- subset(df, Condition=="PDEC")
+df.LE <- subset(df, Condition=="LE")
+
+p.C4vsPDEC.all <- t.test(df.C4$nGene, df.PDEC$nGene)$p.value
+p.C4vsLE.all <- t.test(df.C4$nGene, df.LE$nGene)$p.value
+p.PDECvsLE.all <- t.test(df.PDEC$nGene, df.LE$nGene)$p.value
+
+p.all <- rbind(p.C4vsPDEC.all, p.C4vsLE.all, p.PDECvsLE.all)
+write.csv(p.all, paste0(figures.final, "ngene_by_allCellTypes_ttest_pvalue.csv"))
+
+p.C4vsPDEC.all <- wilcox.test(df.C4$nGene, df.PDEC$nGene)$p.value
+p.C4vsLE.all <- wilcox.test(df.C4$nGene, df.LE$nGene)$p.value
+p.PDECvsLE.all <- wilcox.test(df.PDEC$nGene, df.LE$nGene)$p.value
+
+p.all <- rbind(p.C4vsPDEC.all, p.C4vsLE.all, p.PDECvsLE.all)
+write.csv(p.all, paste0(figures.final, "ngene_by_allCellTypes_wilcox_pvalue.csv"))
+
+
+celltypes.test <- intersect(unique(df.C4$annotate), df.PDEC$annotate)
+celltypes.test <- intersect(celltypes.test, unique(df.LE$annotate))
+n.row = length(celltypes.test)
+
+# TEST USING WILCOX
+p.val.matrix <- data.frame(cellType=rep(NA, n.row), p.C4vsPDEC=rep(NA, n.row), p.C4vsLE=rep(NA, n.row), p.PDECvsLE=rep(NA,n.row))
+count = 1
+for (a in celltypes.test){
+
+        df.14.a <- subset(df.C4, annotate==a)
+        df.14ma.a <- subset(df.PDEC, annotate==a)
+        df.14ml.a <- subset(df.LE, annotate==a)
+        
+        p.val.matrix$cellType[count] = a
+        p.val.matrix$p.C4vsPDEC[count] = wilcox.test(df.C4.a$nGene, df.PDEC.a$nGene)$p.value
+        p.val.matrix$p.C4vsLE[count] = wilcox.test(df.C4.a$nGene, df.LE.a$nGene)$p.value
+        p.val.matrix$p.PDECvsLE[count] = wilcox.test(df.PDEC.a$nGene, df.LE.a$nGene)$p.value
+        
+        count = count + 1
+        
+}
+
+write.csv(p.val.matrix, paste0(figures.final, "ngene_by_celltype_wilcox_pvalue.csv"))
+
+# TEST USING T.TEST 
+p.val.matrix <- data.frame(cellType=rep(NA, n.row), p.C4vsPDEC=rep(NA, n.row), p.C4vsLE=rep(NA, n.row), p.PDECvsLE=rep(NA,n.row))
+count = 1
+for (a in celltypes.test){
+
+        df.14.a <- subset(df.14, annotate==a)
+        df.14ma.a <- subset(df.14ma, annotate==a)
+        df.14ml.a <- subset(df.14ml, annotate==a)
+        
+        p.val.matrix$cellType[count] = a
+        p.val.matrix$p.14vs14MA[count] = t.test(df.14.a$nGene, df.14ma.a$nGene)$p.value
+        p.val.matrix$p.14vs14ML[count] = t.test(df.14.a$nGene, df.14ml.a$nGene)$p.value
+        p.val.matrix$p.14MAvs14ML[count] = t.test(df.14ma.a$nGene, df.14ml.a$nGene)$p.value
+        
+        count = count + 1
+        
+}
+
+write.csv(p.val.matrix, paste0(figures.final, "ngene_by_celltype_ttest_pvalue.csv"))
+
+# calculate mean genes 
+genes_celltype.C4 <- df.C4 %>% group_by(annotate) %>% summarise(nGene=mean(nGene))
+write.csv(genes_celltype.C4, paste0(figures.final, "ngene_by_celltype_mean_C4.csv"))
+
+genes_celltype.PDEC <- df.PDEC %>% group_by(annotate) %>% summarise(nGene=mean(nGene))
+write.csv(genes_celltype.PDEC, paste0(figures.final, "ngene_by_celltype_mean_PDEC.csv"))
+
+genes_celltype.LE <- df.LE %>% group_by(annotate) %>% summarise(nGene=mean(nGene))
+write.csv(genes_celltype.LE, paste0(figures.final, "ngene_by_celltype_mean_LE.csv"))
+
+
+genes_protocol <- df %>% group_by(Condition) %>% summarise(nGene=mean(nGene))
+write.csv(genes_protocol, paste0(figures.final, "ngene_by_protocol_mean_allCellTypes.csv"))
+
+
+```
