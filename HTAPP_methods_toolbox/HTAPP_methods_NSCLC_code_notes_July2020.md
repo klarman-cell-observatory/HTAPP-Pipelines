@@ -1,16 +1,10 @@
-Python environment
-
-Provide user scripts
-Caroline:
+Description of scripts
+```
 source(paste0(user.path, "/code/orr_plotutils_04182019.R"))
 source(paste0(user.path, "/code/orr_seuratutils_04182019.R"))
 source(paste0(user.path, "/code/orr_color_04182019.R"))
 source(paste0(user.path, "/code/plot.umap.feature.R"))
-
-Orr:
-source(paste0(user.path, "/code/R/plotutils.R"))
-source(paste0(user.path, "/code/R/seuratutils.R"))
-source(paste0(user.path, "/code/R/color.R"))
+```
 
 1. htapp_methods_lung_toPostJuly2020.Rmd
 This script processes the sample out of cumulus and sets files up for annotation, inferCNV, and figure generation
