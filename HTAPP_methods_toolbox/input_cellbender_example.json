@@ -1,0 +1,12 @@
+{
+	"cellbender_remove_background.run_cellbender_remove_background_gpu.total_droplets_included" : 40000,
+	"cellbender_remove_background.run_cellbender_remove_background_gpu.z_dim" : 100,
+	"cellbender_remove_background.run_cellbender_remove_background_gpu.epochs" : 150,
+	"cellbender_remove_background.run_cellbender_remove_background_gpu.expected_cells" : 10000,
+	"cellbender_remove_background.run_cellbender_remove_background_gpu.sample_name" : "SAMPLE1",
+	"cellbender_remove_background.run_cellbender_remove_background_gpu.hardware_preemptible_tries" : 0,
+	"cellbender_remove_background.run_cellbender_remove_background_gpu.input_10x_h5_file_or_mtx_directory" : "gs://fc-xxxx/counts/SAMPLE1/raw_feature_bc_matrix.h5",
+	"cellbender_remove_background.run_cellbender_remove_background_gpu.output_directory" : "gs://fc-xxxx/cellbenderv2/SAMPLE1",
+	"cellbender_remove_background.run_cellbender_remove_background_gpu.fpr" : "0.01 0.05 0.1",
+	"cellbender_remove_background.run_cellbender_remove_background_gpu.learning_rate" : 0.000050
+}

@@ -1,0 +1,2 @@
+date,run_pipeline,Channel Name,sampleid,condition,replicate,tissue,Lane,Index,project,reference,introns,chemistry,flowcell,seq_dir,min_umis,min_genes,percent_mito,cellbender_expected_cells,cellbender_total_droplets_included
+2021_05_26,TRUE,SAMPLE1_tissue_type,SAMPLE1,sn,channel1,tissue_type,1,SI-TT-A1,cancer_name,mm10-2020-A,TRUE,SC3Pv3,XXXXXXXXX,/path/to/sequencing/data/flowcell_ID,400,200,20,10000,40000
