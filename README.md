@@ -4,4 +4,4 @@ Thank you,
 
 The HTAPP Team
 
-**11/18/2021 Please note we are finalizing links and will be more complete in a few days**
+**11/30/2021 Please note we are finalizing links and will be more complete in a few days**
