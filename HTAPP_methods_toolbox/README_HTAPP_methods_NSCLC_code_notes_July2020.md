@@ -9,7 +9,7 @@ source(paste0(user.path, "/code/plot.umap.feature.R"))
 1. htapp_methods_lung_toPostJuly2020.Rmd
 This script processes the sample out of cumulus and sets files up for annotation, inferCNV, and figure generation
 
-2. htapp_methods_lung_annotate.Rmd
+2. htapp_methods_lung_annotate_toPostJuly2020.Rmd
 This script is used to annotate the samples, using figures from the first script as guidance
 
 3. htapp_methods_lung_figures_toPostJuly2020.Rmd
