@@ -1,0 +1,214 @@
+specification	method	gene	gene_orig	alternative	comment	type_detail	type
+frozen	codex	ENTPD1	CD39		new		immune
+frozen	codex	CXCR5	CXCR5		new		immune
+fixed	codex	ACTA2	alpha-SMA	ACTA2		myofibroblasts	stroma
+fixed	codex	BCL2	BCL-2	BCL2		apoptosis	apoptosis
+fixed	codex	CTNNB1	beta-catenin	CTNNB1		cell-cell adhesion	stroma
+fixed	codex	TUBB3	Beta-tubulin 3	TUBB3		neurons	neuronal
+frozen	codex	KIT	CD117	KIT		"Hematopoetic progenitors, certain cancers"	malignant
+fixed	mibi	KIT	CD117	KIT		"Hematopoetic progenitors, certain cancers"	malignant
+fixed	codex	ITGAM	CD11b	ITGAM		Immune cells	immune
+fixed	mibi	ITGAM	CD11b	ITGAM		Immune cells	immune
+frozen	codex	ITGAX	CD11c	ITGAX		"monocytes, granulocytes, some B cells, dendritice cells and macrophages"	immune
+fixed	codex	ITGAX	CD11c	ITGAX		"monocytes, granulocytes, some B cells, dendritice cells and macrophages"	immune
+fixed	mibi	ITGAX	CD11c	ITGAX		"monocytes, granulocytes, some B cells, dendritice cells and macrophages"	immune
+frozen	codex	IL3RA	CD123	IL3RA		dendritic cells	immune
+frozen	codex	IL7R	CD127	IL7R		broad	immune
+fixed	codex	SDC1	CD138	SDC1		Plasma cells (and other tissues)	immune
+fixed	mibi	SDC1	CD138	SDC1		Plasma cells (and other tissues)	immune
+frozen	codex	FUT4	CD15	FUT4		"Granulocytes, Lewis X antigen"	immune
+fixed	codex	FUT4	CD15	FUT4		"Granulocytes, Lewis X antigen "	immune
+frozen	codex	CTLA4	CD152	CTLA4		T cells (regulatory and activated)	immune
+frozen	codex	CD40LG	CD154	CD40LG		"Activated T cells (also platelets, mast cells, macrophages, basophils, NK, B-cells, smooth muscle, endothelial and epithelial)"	immune
+frozen	codex	FCGR3A	CD16	FCGR3A /// FCGR3B	ambiguous	"NK cells, neutrophils, monocytes and macrophages"	immune
+frozen	codex	FCGR3B	CD16	FCGR3A /// FCGR3B	ambiguous	"NK cells, neutrophils, monocytes and macrophages"	immune
+fixed	codex	CD163	CD163	CD163		Monocyte/macrophage	immune
+fixed	mibi	CD163	CD163	CD163		Monocyte/macrophage	immune
+frozen	codex	CXCR5	CD185	CXCR5		"B cells, metastasis"	immune
+frozen	codex	CD19	CD19	CD19		B cells	immune
+frozen	codex	CD1C	CD1c	CD1C		APCs	immune
+frozen	codex	CD2	CD2	CD2		T and NK	immune
+fixed	codex	MS4A1	CD20	MS4A1		B cells	immune
+fixed	mibi	MS4A1	CD20	MS4A1		B cells	immune
+frozen	codex	CR2	CD21	CR2		"B cells, T cells and follicular dendritic cells"	immune
+fixed	codex	CR2	CD21	CR2		"B cells, T cells and follicular dendritic cells"	immune
+fixed	mibi	CR2	CD21	CR2		"B cells, T cells and follicular dendritic cells"	immune
+fixed	codex	LAG3	CD223	LAG3		"Activated T cells, NK, B cells and plasmacytoid dendritic cells (checkpoint protein)"	immune evasion
+frozen	codex	IL2RA	CD25	IL2RA /// ISG20	ambiguous	"T cells, B cells"	immune
+frozen	codex	ISG20	CD25	IL2RA /// ISG20	ambiguous	"T cells, B cells"	immune
+fixed	codex	IL2RA	CD25	IL2RA /// ISG20	ambiguous	"T cells, B cells"	immune
+fixed	codex	ISG20	CD25	IL2RA /// ISG20	ambiguous	"T cells, B cells"	immune
+fixed	mibi	IL2RA	CD25	IL2RA /// ISG20	ambiguous	"T cells, B cells"	immune
+fixed	mibi	ISG20	CD25	IL2RA /// ISG20	ambiguous	"T cells, B cells"	immune
+frozen	codex	PDCD1LG2	CD273	PDCD1LG2		PD-L2	immune evasion
+frozen	codex	CD274	CD274	CD274		PD-L1	immune evasion
+fixed	codex	CD274	CD274	CD274		PD-L1	immune evasion
+frozen	codex	ICOS	CD278	ICOS		Activated T cells (checkpoint protein)	immune evasion
+fixed	codex	ICOS	CD278	ICOS		Activated T cells (checkpoint protein)	immune evasion
+frozen	codex	PDCD1	CD279	PDCD1		T cells and pro-B cells (PD-1)	immune evasion
+fixed	codex	PDCD1	CD279	PDCD1		T cells and pro-B cells (PD-1)	immune evasion
+frozen	codex	CD3D	CD3	CD3D	ambiguous	T cells	immune
+fixed	codex	CD3D	CD3	CD3D	ambiguous	T cells	immune
+fixed	mibi	CD3D	CD3	CD3D	ambiguous	T cells	immune
+frozen	codex	PECAM1	CD31	PECAM1		"Endothelial cells, platelets, monocytes, neutrophils, T cells"	stroma
+fixed	codex	PECAM1	CD31	PECAM1		"Endothelial cells, platelets, monocytes, neutrophils, T cells"	stroma
+fixed	mibi	PECAM1	CD31	PECAM1		"Endothelial cells, platelets, monocytes, neutrophils, T cells"	stroma
+fixed	codex	CD34	CD34	CD34		Progenitor cells (including HSCs)	stemness
+fixed	mibi	CD34	CD34	CD34		Progenitor cells (including HSCs)	stemness
+frozen	codex	CD36	CD36	CD36		"broad expression (including platelets, monocytes, mammary gland)"	nutrient import
+frozen	codex	CD38	CD38	CD38		"T cells, B cells, monocytes, NK cells"	immune
+fixed	codex	CD38	CD38	CD38		Immune cells	immune
+fixed	mibi	CD38	CD38	CD38		Immune cells	immune
+frozen	codex	CD4	CD4	CD4		"T helper cells, monocytes, macrophages and dendritic cells"	immune
+fixed	codex	CD4	CD4	CD4		"T helper cells, monocytes, macrophages and dendritic cells"	immune
+fixed	mibi	CD4	CD4	CD4		"T helper cells, monocytes, macrophages and dendritic cells"	immune
+frozen	codex	CD40	CD40	CD40		"APCs (but also B cells, macrophages, endothelial, smooth muscle,  fibroblasts and epithelial)"	immune
+fixed	mibi	GP1BA	CD42b	GP1BA		Platelets (and other tissues)	immune
+frozen	codex	PTPRC	CD45	PTPRC		Hematopoetic cells (except erythrocytes and plasma cells)	immune
+fixed	codex	PTPRC	CD45	PTPRC		Hematopoetic cells (except erythrocytes and plasma cells)	immune
+fixed	mibi	PTPRC	CD45	PTPRC		Hematopoetic cells (except erythrocytes and plasma cells)	immune
+frozen	codex	PTPRC	CD45RA	PTPRC		CD45 isoform	immune
+fixed	codex	PTPRC	CD45RA	PTPRC		CD45 isoform	immune
+fixed	mibi	PTPRC	CD45-RA	PTPRC		CD45 isoform	immune
+fixed	codex	PTPRC	CD45RO	PTPRC		CD45 isoform	immune
+fixed	mibi	PTPRC	CD45RO	PTPRC		CD45 isoform	immune
+frozen	codex	ITGA6	CD49f	ITGA6		stem/progenitor cells (including mammary)	stemness
+frozen	codex	CD5	CD5	CD5		T cells	immune
+frozen	codex	ICAM1	CD54	ICAM1		leukocytes and endothelial cells	stroma
+frozen	codex	NCAM1	CD56	NCAM1		"NK cells (T cells, monocytes, dendritic cells, brain)"	immune
+fixed	codex	NCAM1	CD56	NCAM1		"NK cells (T cells, monocytes, dendritic cells, brain)"	immune
+fixed	mibi	NCAM1	CD56	NCAM1		"NK cells (T cells, monocytes, dendritic cells, brain)"	immune
+frozen	codex	B3GAT1	CD57	B3GAT1		"NK, T-cells (also some epithelial, neural and chromaffin cells)"	immune
+fixed	codex	B3GAT1	CD57	B3GAT1		"NK, T-cells (also some epithelial, neural and chromaffin cells)"	immune
+frozen	codex	CEACAM1	CD66	CEACAM		tumor marker	malignant
+fixed	codex	CD68	CD68	CD68		Monocytes/macrophages	immune
+fixed	mibi	CD68	CD68	CD68		Monocytes/macrophages	immune
+frozen	codex	CD69	CD69	CD69		Immune cells	immune
+frozen	codex	CD7	CD7	CD7		"T cells, NK cells (and early stages of T-, B- and myeloid cell differentation)"	immune
+fixed	codex	TFRC	CD71	TFRC		cellular iron uptake	nutrient import
+fixed	mibi	TFRC	CD71	TFRC		cellular iron uptake	nutrient import
+frozen	codex	CD8A	CD8	CD8A		"cytotoxic T cells, NK cells, thymocytes and dendritic cells"	immune
+fixed	codex	CD8A	CD8	CD8A		"cytotoxic T cells, NK cells, thymocytes and dendritic cells"	immune
+fixed	mibi	CD8A	CD8	CD8A		"cytotoxic T cells, NK cells, thymocytes and dendritic cells"	immune
+frozen	codex	LILRB1	CD85j	LILRB1		Immune cells	immune
+frozen	codex	CD9	CD9	CD9		"immune cells, endothelial cells"	stroma
+frozen	codex	THY1	CD90	THY1		"Thymocytes, hematopoetic stem cells, NK cells, endoethlial cells"	immune
+fixed	codex	CHGA	Chromogranin A	CHGA		neuroendocrine	neuroendocrine
+frozen	codex	COL4A1	collagen IV	COL4A[1-6]	ambiguous	ECM	stroma
+frozen	codex	COL4A2	collagen IV	COL4A[1-6]	ambiguous	ECM	stroma
+frozen	codex	COL4A3	collagen IV	COL4A[1-6]	ambiguous	ECM	stroma
+frozen	codex	COL4A4	collagen IV	COL4A[1-6]	ambiguous	ECM	stroma
+frozen	codex	COL4A5	collagen IV	COL4A[1-6]	ambiguous	ECM	stroma
+frozen	codex	COL4A6	collagen IV	COL4A[1-6]	ambiguous	ECM	stroma
+fixed	codex	COL4A1	collagen IV	COL4A[1-6]	ambiguous	ECM	stroma
+fixed	codex	COL4A2	collagen IV	COL4A[1-6]	ambiguous	ECM	stroma
+fixed	codex	COL4A3	collagen IV	COL4A[1-6]	ambiguous	ECM	stroma
+fixed	codex	COL4A4	collagen IV	COL4A[1-6]	ambiguous	ECM	stroma
+fixed	codex	COL4A5	collagen IV	COL4A[1-6]	ambiguous	ECM	stroma
+fixed	codex	COL4A6	collagen IV	COL4A[1-6]	ambiguous	ECM	stroma
+frozen	codex	KRT1	cytokeratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+frozen	codex	KRT2	cytokeratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+frozen	codex	KRT3	cytokeratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+frozen	codex	KRT4	cytokeratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+frozen	codex	KRT5	cytokeratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+frozen	codex	KRT6	cytokeratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+frozen	codex	KRT7	cytokeratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+frozen	codex	KRT8	cytokeratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+frozen	codex	KRT9	cytokeratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+frozen	codex	KRT10	cytokeratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+frozen	codex	KRT11	cytokeratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+frozen	codex	KRT12	cytokeratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+frozen	codex	KRT13	cytokeratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+frozen	codex	KRT14	cytokeratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+frozen	codex	KRT15	cytokeratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+frozen	codex	KRT16	cytokeratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+frozen	codex	KRT17	cytokeratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+frozen	codex	KRT18	cytokeratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+frozen	codex	KRT19	cytokeratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+frozen	codex	KRT20	cytokeratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+fixed	mibi	CDH1	E-Cadherin	CDH1		tumor suppressor	tumor suppressor
+fixed	codex	EGFR	EGFR	EGFR		oncogene	oncogene
+fixed	codex	EPCAM	EpCAM	EPCAM		epithelial cells	epithelial
+frozen	codex	FAP	FAP	FAP		fibroblasts	stroma
+frozen	codex	FOXP3	Foxp3	FOXP3		Regulatory T cells	immune
+fixed	codex	FOXP3	FOXP3	FOXP3		Regulatory T cells	immune
+fixed	mibi	FOXP3	FoxP3	FOXP3		Regulatory T cells	immune
+fixed	codex	GATA3	GATA3	GATA3		epithelial cell differentiation	epithelial
+fixed	codex	GFAP	GFAP	GFAP		astrocytes	astrocytes
+frozen	codex	SLC2A1	Glucose Transporter	GLUT		glucose transport	nutrient import
+fixed	codex	GZMB	Granzyme B	GZMB		NK cells	immune
+fixed	mibi	GZMB	Granzyme B	GZMB		NK_cells	immune
+fixed	mibi	NA	H3K27ac	NA		histone modification (activation)	histone
+fixed	codex	NA	H3K27me3	NA		histone modification	histone
+fixed	mibi	NA	H3K27me3	NA		histone modification (repression)	histone
+fixed	codex	NA	H3K9ac	NA		histone modification	histone
+fixed	codex	CPS1	Hep-Par-1	CPS1		mitochondria	metabolic
+frozen	codex	HIF1A	HIF-1a	HIF1A		hypoxia	metabolic
+fixed	mibi	NA	Histone H3	NA		histone	histone
+frozen	codex	HLA-A	HLA-ABC	HLA-[ABC]	ambiguous	antigen presentation	immune
+frozen	codex	HLA-B	HLA-ABC	HLA-[ABC]	ambiguous	antigen presentation	immune
+frozen	codex	HLA-C	HLA-ABC	HLA-[ABC]	ambiguous	antigen presentation	immune
+frozen	codex	HLA-DRA	HLA-DR	HLA-DRA		APCs	immune
+fixed	codex	HLA-DRA	HLA-DR	HLA-DRA		APCs	immune
+fixed	mibi	ICOS	ICOS	ICOS		Activated T cells (checkpoint protein)	immune evasion
+fixed	codex	IDO1	IDO-1	IDO1		immune evasion	immune evasion
+frozen	codex	IGHM	IgM	IGHM		B cells	immune
+fixed	codex	KRT7	Keratin 7	KRT7		epithelial cells	epithelial
+frozen	codex	MKI67	Ki67	MKI67		proliferation	proliferation
+fixed	codex	MKI67	Ki-67	MKI67		proliferation	proliferation
+fixed	mibi	MKI67	Ki-67	MKI67		proliferation	proliferation
+fixed	mibi	LAG3	Lag3	LAG3		"Activated T cells, NK, B cells and plasmacytoid dendritic cells (checkpoint protein)"	immune evasion
+fixed	mibi	LAMA1	Lamin A	LAMA[1-5]		ECM	stroma
+fixed	mibi	LAMC1	Lamin C	LAMC[1-3]		ECM	stroma
+fixed	codex	PRSS22	Mast cell tryptase	"PRSS22/ TPS[AB1,B2,D1,G1]"	ambiguous	Mast cells	immune
+fixed	codex	TPSAB1	Mast cell tryptase	"PRSS22/ TPS[AB1,B2,D1,G1]"	ambiguous	Mast cells	immune
+fixed	codex	TPSB2	Mast cell tryptase	"PRSS22/ TPS[AB1,B2,D1,G1]"	ambiguous	Mast cells	immune
+fixed	codex	TPSD1	Mast cell tryptase	"PRSS22/ TPS[AB1,B2,D1,G1]"	ambiguous	Mast cells	immune
+fixed	codex	TPSG1	Mast cell tryptase	"PRSS22/ TPS[AB1,B2,D1,G1]"	ambiguous	Mast cells	immune
+fixed	codex	HLA-A	MHC-I	HLA-[ABC]	ambiguous	antigen presentation	immune
+fixed	codex	HLA-B	MHC-I	HLA-[ABC]	ambiguous	antigen presentation	immune
+fixed	codex	HLA-C	MHC-I	HLA-[ABC]	ambiguous	antigen presentation	immune
+frozen	codex	MMP12	MMP12	MMP12		ECM breakdown	stroma
+fixed	codex	MMP12	MMP12	MMP12		ECM breakdown	stroma
+fixed	codex	MMP9	MMP9	MMP9		"Endothelial cells, platelets, monocytes, neutrophils, T cells"	epithelial
+fixed	mibi	MPO	MPO	MPO		granulocytes	immune
+fixed	codex	MUC1	MUC-1	MUC1		epithelial cells	epithelial
+fixed	codex	MPO	Myeloperoxidase	MPO		neutrophils	immune
+fixed	codex	TP53	p53	TP53		tumor suppressor	tumor suppressor
+fixed	mibi	TP53	p53	TP53		tumor suppressor	tumor suppressor
+fixed	codex	KRT1	Pan-Keratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+fixed	codex	KRT2	Pan-Keratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+fixed	codex	KRT3	Pan-Keratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+fixed	codex	KRT4	Pan-Keratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+fixed	codex	KRT5	Pan-Keratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+fixed	codex	KRT6	Pan-Keratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+fixed	codex	KRT7	Pan-Keratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+fixed	codex	KRT8	Pan-Keratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+fixed	codex	KRT9	Pan-Keratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+fixed	codex	KRT10	Pan-Keratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+fixed	codex	KRT11	Pan-Keratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+fixed	codex	KRT12	Pan-Keratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+fixed	codex	KRT13	Pan-Keratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+fixed	codex	KRT14	Pan-Keratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+fixed	codex	KRT15	Pan-Keratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+fixed	codex	KRT16	Pan-Keratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+fixed	codex	KRT17	Pan-Keratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+fixed	codex	KRT18	Pan-Keratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+fixed	codex	KRT19	Pan-Keratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+fixed	codex	KRT20	Pan-Keratin	KRT[1-20]	ambiguous	epithelial cells	epithelial
+fixed	mibi	PDCD1	PD-1	PDCD1		"T cells and pro-B cells, Immune checkpoint"	immune evasion
+fixed	mibi	CD274	PD-L1	CD274		Immune checkpoint ligand	immune evasion
+frozen	codex	PDPN	podoplanin	PDPN		CAFs	stroma
+fixed	codex	PDPN	Podoplanin	PDPN		CAFs	stroma
+fixed	mibi	STAT5A	pSTAT5	STAT5A		proliferation marker	proliferation
+fixed	codex	S100A6	S100A6	S100A6		"cell cycle progression, differentiation"	proliferation
+fixed	codex	SYP	Synaptophysin	SYP		neuroendocrine	neuroendocrine
+fixed	mibi	TBX21	Tbet	TBX21		NK cells	immune
+frozen	codex	TCRD	TCRyd	TCRD	ambiguous	T cells	immune
+frozen	codex	TCRG	TCRyd	TCRD	ambiguous	T cells	immune
+fixed	mibi	DNTT	TdT	DNTT		junctional diversity during TCR and BCR generation	immune
+frozen	codex	VIM	Vimentin	VIM		mesenchymal	stroma
+fixed	codex	VIM	Vimentin	VIM		mesenchymal	stroma
+fixed	mibi	VIM	Vimentin	VIM		mesenchymal	stroma
+fixed	codex	C10orf54	VISTA	VSIR		TILs (checkpoint)	immune evasion
+fixed	mibi	C10orf54	VISTA	VSIR		TILs (checkpoint)	immune evasion
