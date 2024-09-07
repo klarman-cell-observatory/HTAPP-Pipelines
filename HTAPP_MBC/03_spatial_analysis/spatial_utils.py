@@ -18,8 +18,13 @@ import glob
 import tacco as tc
 import tacco
 
-
-
+try:
+    sys.path.insert(1, '/secure/projects/tacco/tacco')
+    import spatial_colocalization
+    tacco.spatial_colocalization = spatial_colocalization
+except:
+    print("Could not import spatial_colocalization")
+    
 #allows to load large images (otherwise decopression bomb warning)
 PIL.Image.MAX_IMAGE_PIXELS=None
 
@@ -125,11 +130,23 @@ def scale(im, rat=0.5,crop_x=(0,0),crop_y=(0,0), fill_value=1.0):
             add_bottom=0
         fill_value = fill_value * im.max()
         new=np.full(fill_value=fill_value,shape=(im.shape[0]+add_bottom,im.shape[1]+add_left,im.shape[2]),dtype=im.dtype)
+        ##new=np.full_like(im,im.max(),shape=(im.shape[0]+add_bottom,im.shape[1]+add_left,im.shape[2]))
+        ##new=np.full(fill_value=im.max(),shape=(im.shape[0]+add_bottom,im.shape[1]+add_left,im.shape[2]))
+        #new=np.zeros(shape=(im.shape[0]+add_bottom,im.shape[1]+add_left,im.shape[2]),dtype=im.dtype)
+        ##new[:,:,:3] = 0
+        ##new[:,:,3:] = im.max()
         new[add_bottom:add_bottom+im.shape[0],add_left:add_left+im.shape[1]]=im
         im=new
     im=transform.rescale(im,rat,multichannel=True)
     return im
 
+#alternative way of scaling
+#    nR0 = len(im)     # source number of rows 
+#    nC0 = len(im[0])  # source number of columns 
+#    nR = int(nR0 * rat)
+#    nC = int(nC0 * rat)
+#    return im[np.arange(0, nR0, nR0 / nR).astype(int)][:,np.arange(0, nC0, nC0 / nC).astype(int)]
+    return im
     
 
 def aligner(adatas,img_idx,registration,dat_idxs,img_idx2=None,figsize=(12,12),dot_sizes=4.5,he_method="HE_highres",adjust=False,change=False,adjust_HE=True):
@@ -493,7 +510,7 @@ def plot_confusion(adata,keys_1,keys_2,sel_colors,sort_cols=True, sort_rows=True
 
 ############# Processing #######################################        
         
-# function to process single-cell or spatial data with standard scanpy pipeline
+# function to process single-cell or soatial data with standard scanpy pipeline
 def create_scanpy(adatas,replicates=None,var_genes=None,batch_key='replicate',redo=False,process=True,mode=None):
     if redo == True:
         if "counts" in list(adatas.obsm.keys()):
@@ -581,6 +598,7 @@ def create_scanpy(adatas,replicates=None,var_genes=None,batch_key='replicate',re
         adata.raw = adata
         adata.obsm["counts"] = counts
         adata.uns["counts_var"] = var
+#        sc.pp.regress_out(adata, ['n_counts']);
     
     
     sc.pp.scale(adata, max_value=10)
@@ -715,7 +733,7 @@ def run_typing(adatas,out_dir,sample,ct_column="cell_type",sc_method="scRNAseq",
     pipes['OT'] = lambda sp_raw: tc.tl.annotate(sp_raw, reference=adatas[sc_method], annotation_key=ct_column,method='OT',platform_iterations=0,normalize_to='reference',lamb=0.001,multi_center=4 ,bisections=4, bisection_divisor=3,counts_location=("obsm","counts"))
     pipes['OT_max'] = lambda sp_raw: tc.tl.annotate(subset_genes(sp_raw,kick_genes), reference=adatas[sc_method], annotation_key=ct_column,method='OT',max_annotation=1,platform_iterations=0,normalize_to='reference', lamb=0.001, multi_center=4,bisections=4, bisection_divisor=3,counts_location=("obsm","counts"))
     if RCTD is True:
-        pipes['RCTD'] = lambda sp_raw: tc.tl.annotate(sp_raw, reference=adatas[sc_method], annotation_key=ct_column,method='RCTD',conda_env='/secure/conda_envs/RCTD', platform_iterations=None, doublet=False, n_cores=6, min_ct=2, verbose=False, counts_location=("obsm","counts"))
+        pipes['RCTD'] = lambda sp_raw: tc.tl.annotate(sp_raw, reference=adatas[sc_method], annotation_key=ct_column,method='RCTD',conda_env='/ahg/regevdata/users/smages/conda_envs/RCTD', platform_iterations=None, doublet=False, n_cores=6, min_ct=2, verbose=False, counts_location=("obsm","counts"))
     
     
     rows = []
