@@ -2,18 +2,21 @@ import logging as logg
 import scanpy as sc
 import pandas as pd
 import os
-from plotnine import * 
-
+try:
+    from plotnine import * 
+    #plotnine
+    theme_set(theme_bw(base_size=10))
+    theme_update(axis_text=element_text(color="black"),panel_grid_major = element_blank(), panel_grid_minor = element_blank(),panel_background = element_rect(fill = "white"))
+    def rotate_labels (angle=60,vjust=1,hjust=1):
+        return theme(axis_text_x = element_text(angle = angle, vjust = vjust,hjust=hjust))
+except:
+    print("running without plotnine")
 
 ### Display settings
 pd.set_option('display.max_columns', 100)
 sc.settings.set_figure_params(dpi=80)
 
-#plotnine
-theme_set(theme_bw(base_size=10))
-theme_update(axis_text=element_text(color="black"),panel_grid_major = element_blank(), panel_grid_minor = element_blank(),panel_background = element_rect(fill = "white"))
-def rotate_labels (angle=60,vjust=1,hjust=1):
-    return theme(axis_text_x = element_text(angle = angle, vjust = vjust,hjust=hjust))
+
 
 
 ### Paths
@@ -162,3 +165,24 @@ colors['B_plasma']='#f86652'
 colors['B']='#cf1917'
 colors['T']='#fbb2a1'
 colors['NK']='#860000'
+
+
+#receptor colors
+rc_colors=pd.Series(dtype=object)
+rc_colors['HR+/HER2-'] = '#255668'
+rc_colors['HR+/HER2+'] = '#008C80'
+rc_colors['HR-/HER2+'] = '#61C074'
+rc_colors['HR-/HER2-'] = '#EDEF5C'
+
+
+#tissue colors
+ti_colors=pd.Series(dtype=object)
+ti_colors['Axilla']='#7c0e6f'
+ti_colors['Bone']='#c41296'
+ti_colors['Brain']='#e86bbb'
+ti_colors['Breast']='#ba100e'
+ti_colors['Chest wall']='#fc5644'
+ti_colors['Liver']='#fc9a90'
+ti_colors['Lung']='#c16b18'
+ti_colors['Neck']='#fcaf3f'
+ti_colors['Skin']='#fcd7a2'

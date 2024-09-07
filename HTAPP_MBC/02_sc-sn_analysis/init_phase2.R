@@ -22,6 +22,7 @@ give.n <- function(x,y = NULL){
   return(data.frame(y = ifelse(is.null(y),0,y), label = paste0("N=",length(x)))) 
 }
 
+
 #Directories
 projectDir="/scratch/projects/HTAPP_MBC/"
 baseDir=file.path(projectDir,"phase2")
@@ -85,15 +86,25 @@ rc_colors['HR-/HER2-'] = '#EDEF5C'
 
 #tissue colors
 ti_colors=list()
-ti_colors['Axilla'] = '#7D1D67'
-ti_colors['Bone'] = '#A02074'
-ti_colors['Brain'] = '#C22B79'
-ti_colors['Breast'] = '#E13C77'
-ti_colors['Chest wall'] = '#F65A6D'
-ti_colors['Liver'] = '#FD806D'
-ti_colors['Lung'] = '#FFA076'
-ti_colors['Neck'] = '#FFBD88'
-ti_colors['Skin'] = '#FFD99F'
+#ti_colors['Axilla'] = '#7D1D67'
+#ti_colors['Bone'] = '#A02074'
+#ti_colors['Brain'] = '#C22B79'
+#ti_colors['Breast'] = '#E13C77'
+#ti_colors['Chest wall'] = '#F65A6D'
+#ti_colors['Liver'] = '#FD806D'
+#ti_colors['Lung'] = '#FFA076'
+#ti_colors['Neck'] = '#FFBD88'
+#ti_colors['Skin'] = '#FFD99F'
+
+ti_colors['Axilla']='#7c0e6f'
+ti_colors['Bone']='#c41296'
+ti_colors['Brain']='#e86bbb'
+ti_colors['Breast']='#ba100e'
+ti_colors['Chest wall']='#fc5644'
+ti_colors['Liver']='#fc9a90'
+ti_colors['Lung']='#c16b18'
+ti_colors['Neck']='#fcaf3f'
+ti_colors['Skin']='#fcd7a2'
 
 
 
@@ -114,6 +125,10 @@ sample_sheet[site%in%c("right breast skin punch","left lower abdomen skin punch"
 sample_sheet[site%in%c("breast","left breast"),site_group:="breast"]
 sample_sheet[site%in%c("left parietal mass","left parietal"),site_group:="brain"]
 sample_sheet[site%in%c("chest wall","left peristernal soft tissue mass"),site_group:="chest"]
+
+#source(file.path(metaDir,"mbc_signatures_ofir.R"))
+
+
 
 
 #Functions
@@ -176,6 +191,13 @@ make_seurat_annot = function(cb,min.features=0,ft=TRUE,cellTypes=NULL){
     s_co=SingleR(test = GetAssayData(object = so, slot = "data"),ref= list(ref.se,ref.be), labels = list(se_labels_main,be_labels_main),fine.tune = ft)
     s_co_cl=SingleR(test = GetAssayData(object = so, slot = "data"),clusters = so@active.ident,ref= list(ref.se,ref.be),method = "cluster", labels = list(se_labels_main,be_labels_main),fine.tune = ft)
    
+     
+    #modify se labels to include plasma cells (original - missing the correct plasma cell annotation)
+    #se_labels_main=ref.se$label.main
+    #se_labels_main[grepl("B_cell:Plasma_cell",ref.se$label.fine)] <- "Plasma_cell"
+    
+    #s_co=SingleR(test = cb,ref= list(ref.se,ref.be), labels = list(se_labels_main,ref.be$label.main),fine.tune = ft)
+    #s_co_cl=SingleR(test = GetAssayData(object = so, slot = "data"),clusters = so@active.ident,ref= list(ref.se,ref.be),method = "cluster", labels = list(se_labels_main,ref.be$label.main),fine.tune = ft)
     
     s_co_dt=as.data.table(s_co$scores)
     s_co_dt[,labels:=s_co$labels,]
@@ -196,6 +218,7 @@ make_seurat_annot = function(cb,min.features=0,ft=TRUE,cellTypes=NULL){
 
 subset_seurat = function(so,sel_cells,var.only=FALSE){
     
+#    so <- subset(so,cells = sel_cells) # only used the features of the data slot even if counts had all features therefore changed to the line below
     so <- CreateSeuratObject(GetAssayData(so,slot="counts")[,sel_cells],meta.data=so@meta.data[sel_cells,])
     so <- NormalizeData(object = so)
     so <- FindVariableFeatures(object = so)
